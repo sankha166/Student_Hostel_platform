@@ -63,11 +63,14 @@ const StudentDashboard = () => {
 
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => navigate("/student/rent")} className="text-muted-foreground">
+              Food
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/student/rent")} className="text-muted-foreground">
               My Rent
             </Button>
-            <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
+            <Button variant="ghost" size="icon" onClick={() => navigate("/student/profile")} className="rounded-full bg-primary/10">
               <User size={18} className="text-primary" />
-            </div>
+            </Button>
             <Button 
               variant="ghost" 
               size="icon" 

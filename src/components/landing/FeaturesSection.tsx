@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Brain, Camera, BarChart3, CreditCard, GraduationCap } from "lucide-react";
+import { Brain, Clock, Camera, BarChart3, CreditCard, GraduationCap } from "lucide-react";
 
 const features = [
   {
@@ -12,6 +12,12 @@ const features = [
     icon: Camera,
     title: "Image-Based Discovery",
     description: "Upload a photo to find similar rooms instantly.",
+    gradient: "from-accent to-accent/70",
+  },
+  {
+    icon: Clock,
+    title: "Instant Bookingus",
+    description: "Book rooms instantly with online payment and get instant confirmation.",
     gradient: "from-accent to-accent/70",
   },
   {

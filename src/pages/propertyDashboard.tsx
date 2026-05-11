@@ -527,6 +527,7 @@ Generated on: ${new Date().toLocaleDateString()}
                           <TableHead>Rent</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Amenities</TableHead>
+                          <TableHead>Add Bills</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>

@@ -45,6 +45,7 @@ const Navbar = () => {
           <Link to="/" className="text-sm text-muted-foreground hover:text-foreground">Home</Link>
           <Link to="/student" className="text-sm text-muted-foreground hover:text-foreground">Explore</Link>
           <Link to="/owner" className="text-sm text-muted-foreground hover:text-foreground">For Owners</Link>
+          <Link to="/food" className="text-sm text-muted-foreground hover:text-foreground">Home Delivery</Link>
         </div>
 
         {/* Right side */}

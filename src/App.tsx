@@ -13,6 +13,8 @@ import OwnerMainDashboard from "./pages/OwnerMainDashboard.tsx";
 import PropertyDashboard from "./pages/propertyDashboard.tsx";
 import AddProperty from "./pages/AddProperty.tsx";
 import OwnerProfile from "./pages/OwnerProfile.tsx";
+import StudentProfile from "./pages/StudentProfile.tsx";
+import FoodDelivery from "./pages/FoodDelivery.tsx";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -31,6 +33,8 @@ const App = () => (
           <Route path="/owner/property/:propertyId" element={<PropertyDashboard />} />
           <Route path="/owner/add-property" element={<AddProperty />} />
           <Route path="/owner/profile" element={<OwnerProfile />} />
+          <Route path="/student/profile" element={<StudentProfile />} />
+          <Route path="/food" element={<FoodDelivery />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
