@@ -16,7 +16,7 @@ const features = [
   },
   {
     icon: Clock,
-    title: "Instant Bookingus",
+    title: "Instant Booking",
     description: "Book rooms instantly with online payment and get instant confirmation.",
     gradient: "from-accent to-accent/70",
   },

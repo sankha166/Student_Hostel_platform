@@ -1,518 +1,227 @@
 /**
- * API Service Module
- * Centralized API calls for the application
- * Configure VITE_API_URL in .env file
+ * API Service Module — Local Implementation
+ * 
+ * All API calls are routed to the local dataService (localStorage).
+ * This keeps the API interface stable for future backend migration.
+ * To switch to a real backend, replace these implementations with fetch() calls.
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
-const AI_SERVICE_URL = import.meta.env.VITE_AI_SERVICE_URL || "http://localhost:5000";
+import {
+  hostelService, bookingService, rentService, paymentAccountService,
+  propertyService, roomService, tenantService, profileService,
+  authService, foodService,
+  type Hostel, type BookingRequest, type PaymentAccount,
+  type OwnerProperty, type PropertyRoom, type PropertyTenant,
+  type RentPayment,
+} from "./dataService";
 
 // ============ STUDENT API ============
 
 export const studentAPI = {
-  /**
-   * Search hostels by text
-   */
   searchHostels: async (query: string, filters?: Record<string, any>) => {
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/hostels/search?q=${query}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(filters),
-        }
-      );
-      if (!response.ok) {
-        throw new APIError(response.status, await response.json().catch(() => ({})));
-      }
-      return response.json();
-    } catch (error) {
-      if (error instanceof APIError) throw error;
-      throw new APIError(0, { message: "Failed to search hostels" });
-    }
+    return hostelService.search(query, filters as any);
   },
 
-  /**
-   * Search hostels by image
-   */
-  searchByImage: async (file: File) => {
-    const formData = new FormData();
-    formData.append("image", file);
-
-    const response = await fetch(
-      `${AI_SERVICE_URL}/api/search-by-image`,
-      {
-        method: "POST",
-        body: formData,
-      }
-    );
-    return response.json();
+  searchByImage: async (_file: File) => {
+    // Image search requires an AI backend — return helpful message
+    return {
+      results: [],
+      message: "Image search requires an AI service backend. Use text search instead.",
+    };
   },
 
-  /**
-   * Get hostel details
-   */
   getHostelDetails: async (hostelId: string) => {
-    const response = await fetch(`${API_BASE_URL}/api/hostels/${hostelId}`);
-    return response.json();
+    return hostelService.getById(hostelId);
   },
 
-  /**
-   * Get hostel reviews
-   */
   getHostelReviews: async (hostelId: string) => {
-    const response = await fetch(`${API_BASE_URL}/api/hostels/${hostelId}/reviews`);
-    return response.json();
+    const hostel = hostelService.getById(hostelId);
+    return hostel?.reviews || [];
   },
 
-  /**
-   * Book a hostel
-   */
-  bookHostel: async (hostelId: string, bookingData: Record<string, any>) => {
-    const response = await fetch(`${API_BASE_URL}/api/bookings`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ hostelId, ...bookingData }),
-    });
-    return response.json();
+  bookHostel: async (_hostelId: string, bookingData: Record<string, any>) => {
+    return bookingService.create(bookingData as any);
   },
 
-  /**
-   * Get student's rent payments
-   */
   getRentPayments: async (studentId: string) => {
-    const response = await fetch(`${API_BASE_URL}/api/students/${studentId}/rent`);
-    return response.json();
+    return rentService.getPayments(studentId);
   },
 
-  /**
-   * Get student profile
-   */
   getProfile: async (studentId: string) => {
-    const response = await fetch(`${API_BASE_URL}/api/students/${studentId}`);
-    return response.json();
+    return profileService.getStudentProfile(studentId);
   },
 };
 
 // ============ OWNER API ============
 
 export const ownerAPI = {
-  /**
-   * Get owner's properties
-   */
-  getProperties: async (ownerId: string) => {
-    const response = await fetch(`${API_BASE_URL}/api/owners/${ownerId}/properties`);
-    return response.json();
+  getProperties: async (_ownerId: string) => {
+    return propertyService.getAll();
   },
 
-  /**
-   * Create new property
-   */
   createProperty: async (propertyData: Record<string, any>) => {
-    const response = await fetch(`${API_BASE_URL}/api/properties`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(propertyData),
-    });
-    return response.json();
+    return propertyService.create(propertyData as any);
   },
 
-  /**
-   * Update property
-   */
   updateProperty: async (propertyId: string, updates: Record<string, any>) => {
-    const response = await fetch(`${API_BASE_URL}/api/properties/${propertyId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updates),
-    });
-    return response.json();
+    return propertyService.update(propertyId, updates);
   },
 
-  /**
-   * Delete property
-   */
   deleteProperty: async (propertyId: string) => {
-    const response = await fetch(`${API_BASE_URL}/api/properties/${propertyId}`, {
-      method: "DELETE",
-    });
-    return response.json();
+    return { success: propertyService.delete(propertyId) };
   },
 
-  /**
-   * Get property rooms
-   */
   getPropertyRooms: async (propertyId: string) => {
-    const response = await fetch(`${API_BASE_URL}/api/properties/${propertyId}/rooms`);
-    return response.json();
+    return roomService.getByProperty(propertyId);
   },
 
-  /**
-   * Get property tenants
-   */
   getPropertyTenants: async (propertyId: string) => {
-    const response = await fetch(`${API_BASE_URL}/api/properties/${propertyId}/tenants`);
-    return response.json();
+    return tenantService.getByProperty(propertyId);
   },
 
-  /**
-   * Add tenant to property
-   */
-  addTenant: async (propertyId: string, tenantData: Record<string, any>) => {
-    const response = await fetch(
-      `${API_BASE_URL}/api/properties/${propertyId}/tenants`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(tenantData),
-      }
-    );
-    return response.json();
+  addTenant: async (_propertyId: string, tenantData: Record<string, any>) => {
+    return tenantService.add(tenantData as any);
   },
 
-  /**
-   * Get booking requests
-   */
-  getBookingRequests: async (propertyId: string) => {
-    const response = await fetch(
-      `${API_BASE_URL}/api/properties/${propertyId}/booking-requests`
-    );
-    return response.json();
+  getBookingRequests: async (_propertyId: string) => {
+    return bookingService.getAll();
   },
 
-  /**
-   * Respond to booking request
-   */
   respondToBooking: async (
     bookingId: string,
     status: "approved" | "rejected",
-    data?: Record<string, any>
+    _data?: Record<string, any>
   ) => {
-    const response = await fetch(`${API_BASE_URL}/api/bookings/${bookingId}/respond`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, ...data }),
-    });
-    return response.json();
+    const mappedStatus = status === "approved" ? "accepted" : "rejected";
+    return bookingService.updateStatus(bookingId, mappedStatus as any);
   },
 
-  /**
-   * Get payment accounts
-   */
-  getPaymentAccounts: async (ownerId: string) => {
-    const response = await fetch(`${API_BASE_URL}/api/owners/${ownerId}/payment-accounts`);
-    return response.json();
+  getPaymentAccounts: async (_ownerId: string) => {
+    return paymentAccountService.getAll();
   },
 
-  /**
-   * Add payment account
-   */
-  addPaymentAccount: async (ownerId: string, accountData: Record<string, any>) => {
-    const response = await fetch(
-      `${API_BASE_URL}/api/owners/${ownerId}/payment-accounts`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(accountData),
-      }
-    );
-    return response.json();
+  addPaymentAccount: async (_ownerId: string, accountData: Record<string, any>) => {
+    return paymentAccountService.add(accountData as any);
   },
 
-  /**
-   * Get owner profile
-   */
-  getProfile: async (ownerId: string) => {
-    const response = await fetch(`${API_BASE_URL}/api/owners/${ownerId}`);
-    return response.json();
+  getProfile: async (_ownerId: string) => {
+    return profileService.getOwnerProfile();
   },
 
-  /**
-   * Update owner profile
-   */
-  updateProfile: async (ownerId: string, updates: Record<string, any>) => {
-    const response = await fetch(`${API_BASE_URL}/api/owners/${ownerId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updates),
-    });
-    return response.json();
+  updateProfile: async (_ownerId: string, updates: Record<string, any>) => {
+    return profileService.updateOwnerProfile(updates);
   },
 };
 
 // ============ AUTH API ============
 
 export const authAPI = {
-  /**
-   * Student login
-   */
   studentLogin: async (email: string, password: string) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/student/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      if (!response.ok) {
-        throw new APIError(response.status, await response.json().catch(() => ({})));
-      }
-      return response.json();
-    } catch (error) {
-      if (error instanceof APIError) throw error;
-      throw new APIError(0, { message: "Failed to login" });
-    }
+    return authService.login(email, password);
   },
 
-  /**
-   * Student signup
-   */
   studentSignup: async (userData: Record<string, any>) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/student/signup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(userData),
-      });
-      if (!response.ok) {
-        throw new APIError(response.status, await response.json().catch(() => ({})));
-      }
-      return response.json();
-    } catch (error) {
-      if (error instanceof APIError) throw error;
-      throw new APIError(0, { message: "Failed to create account" });
-    }
+    return authService.signup({
+      email: userData.email,
+      password: userData.password,
+      name: userData.name || userData.fullName,
+      role: "student",
+      phone: userData.phone,
+      address: userData.address,
+    });
   },
 
-  /**
-   * Owner login
-   */
   ownerLogin: async (email: string, password: string) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/owner/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      if (!response.ok) {
-        throw new APIError(response.status, await response.json().catch(() => ({})));
-      }
-      return response.json();
-    } catch (error) {
-      if (error instanceof APIError) throw error;
-      throw new APIError(0, { message: "Failed to login" });
-    }
+    return authService.login(email, password);
   },
 
-  /**
-   * Owner signup
-   */
   ownerSignup: async (userData: Record<string, any>) => {
+    return authService.signup({
+      email: userData.email,
+      password: userData.password,
+      name: userData.name || userData.fullName,
+      role: "owner",
+      phone: userData.phone,
+      address: userData.address,
+    });
+  },
+
+  googleLogin: async (_googleToken: string, role: "student" | "owner") => {
+    // Google OAuth requires a real backend — simulate with demo accounts
+    const email = `demo.${role}@gmail.com`;
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/owner/signup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(userData),
+      return await authService.login(email, "demo123456");
+    } catch {
+      return await authService.signup({
+        email,
+        password: "demo123456",
+        name: role === "student" ? "Demo Student" : "Demo Owner",
+        role,
       });
-      if (!response.ok) {
-        throw new APIError(response.status, await response.json().catch(() => ({})));
-      }
-      return response.json();
-    } catch (error) {
-      if (error instanceof APIError) throw error;
-      throw new APIError(0, { message: "Failed to create account" });
     }
   },
 
-  /**
-   * Google OAuth login
-   */
-  googleLogin: async (googleToken: string, role: "student" | "owner") => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/google/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ googleToken, role }),
-      });
-      if (!response.ok) {
-        throw new APIError(response.status, await response.json().catch(() => ({})));
-      }
-      return response.json();
-    } catch (error) {
-      if (error instanceof APIError) throw error;
-      throw new APIError(0, { message: "Google login failed" });
-    }
-  },
-
-  /**
-   * Logout
-   */
   logout: async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/logout`, {
-        method: "POST",
-      });
-      if (!response.ok) {
-        throw new APIError(response.status, await response.json().catch(() => ({})));
-      }
-      return response.json();
-    } catch (error) {
-      // Logout always succeeds on client side
-      return { success: true };
-    }
+    return { success: true };
   },
 
-  /**
-   * Verify token
-   */
-  verifyToken: async (token: string) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/verify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token }),
-      });
-      if (!response.ok) {
-        throw new APIError(response.status, await response.json().catch(() => ({})));
-      }
-      return response.json();
-    } catch (error) {
-      if (error instanceof APIError) throw error;
-      throw new APIError(0, { message: "Token verification failed" });
-    }
+  verifyToken: async (_token: string) => {
+    return { valid: true };
   },
 
-  /**
-   * Refresh token
-   */
-  refreshToken: async (refreshToken: string) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken }),
-      });
-      if (!response.ok) {
-        throw new APIError(response.status, await response.json().catch(() => ({})));
-      }
-      return response.json();
-    } catch (error) {
-      if (error instanceof APIError) throw error;
-      throw new APIError(0, { message: "Token refresh failed" });
-    }
+  refreshToken: async (_refreshToken: string) => {
+    return { token: `tok_${Date.now()}` };
   },
 
-  /**
-   * Forgot password
-   */
-  forgotPassword: async (email: string) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-      if (!response.ok) {
-        throw new APIError(response.status, await response.json().catch(() => ({})));
-      }
-      return response.json();
-    } catch (error) {
-      if (error instanceof APIError) throw error;
-      throw new APIError(0, { message: "Failed to send reset link" });
-    }
+  forgotPassword: async (_email: string) => {
+    return { message: "Password reset is not available in local mode. Please create a new account." };
   },
 
-  /**
-   * Reset password
-   */
-  resetPassword: async (token: string, password: string) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/reset-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, password }),
-      });
-      if (!response.ok) {
-        throw new APIError(response.status, await response.json().catch(() => ({})));
-      }
-      return response.json();
-    } catch (error) {
-      if (error instanceof APIError) throw error;
-      throw new APIError(0, { message: "Failed to reset password" });
-    }
+  resetPassword: async (_token: string, _password: string) => {
+    return { success: false, message: "Password reset requires a backend server." };
   },
 };
 
 // ============ PAYMENT API ============
 
 export const paymentAPI = {
-  /**
-   * Initialize payment
-   */
   initializePayment: async (amount: number, description: string) => {
-    const response = await fetch(`${API_BASE_URL}/api/payments/initialize`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount, description }),
-    });
-    return response.json();
+    // UPI payments are handled via deep links in the UI
+    return {
+      orderId: `order_${Date.now()}`,
+      amount,
+      description,
+      method: "UPI",
+    };
   },
 
-  /**
-   * Verify payment
-   */
-  verifyPayment: async (paymentId: string, signature: string) => {
-    const response = await fetch(`${API_BASE_URL}/api/payments/verify`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ paymentId, signature }),
-    });
-    return response.json();
+  verifyPayment: async (paymentId: string, _signature: string) => {
+    return { verified: true, paymentId };
   },
 };
 
 // ============ AI SERVICES ============
 
 export const aiServices = {
-  /**
-   * Extract room features from image
-   */
-  extractRoomFeatures: async (file: File) => {
-    const formData = new FormData();
-    formData.append("image", file);
-
-    const response = await fetch(
-      `${AI_SERVICE_URL}/api/extract-room-features`,
-      {
-        method: "POST",
-        body: formData,
-      }
-    );
-    return response.json();
+  extractRoomFeatures: async (_file: File) => {
+    return {
+      features: [],
+      message: "AI feature extraction requires a backend service.",
+    };
   },
 
-  /**
-   * Get AI recommendations
-   */
-  getRecommendations: async (userPreferences: Record<string, any>) => {
-    const response = await fetch(`${AI_SERVICE_URL}/api/recommendations`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(userPreferences),
-    });
-    return response.json();
+  getRecommendations: async (_userPreferences: Record<string, any>) => {
+    // Return top-rated hostels as recommendations
+    const all = hostelService.getAll();
+    return all.sort((a, b) => b.matchPercent - a.matchPercent).slice(0, 3);
   },
 
-  /**
-   * Process text to extract intent and preferences
-   */
   processUserQuery: async (query: string) => {
-    const response = await fetch(`${AI_SERVICE_URL}/api/process-query`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query }),
-    });
-    return response.json();
+    return {
+      query,
+      intent: "search",
+      preferences: {},
+    };
   },
 };
 
@@ -524,31 +233,6 @@ export class APIError extends Error {
   }
 }
 
-/**
- * Utility to safely handle API calls with error handling
- */
-async function fetchAPI<T>(
-  url: string,
-  options?: RequestInit
-): Promise<T> {
-  try {
-    const response = await fetch(url, options);
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
-      throw new APIError(response.status, data);
-    }
-    return response.json();
-  } catch (error) {
-    if (error instanceof APIError) throw error;
-    throw new APIError(0, {
-      message: error instanceof Error ? error.message : "Network error",
-    });
-  }
-}
-
-/**
- * Utility to handle API responses (legacy, kept for compatibility)
- */
 export async function handleAPIResponse(response: Response) {
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));

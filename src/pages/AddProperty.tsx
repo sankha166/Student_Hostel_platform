@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
+import { propertyService } from "@/lib/dataService";
 
 const libraries: ("places" | "drawing" | "geometry" | "visualization")[] = ['places'];
 
@@ -85,8 +86,29 @@ const AddProperty = () => {
     setImages(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Persist property using dataService
+    propertyService.create({
+      name: form.name,
+      type: form.type,
+      location: `${form.city}, ${form.state}`,
+      address: `${form.address}, ${form.city}, ${form.state} - ${form.pincode}`,
+      totalRooms: parseInt(form.totalRooms) || 0,
+      occupiedRooms: 0,
+      totalBeds: parseInt(form.totalRooms) || 0,
+      occupiedBeds: 0,
+      monthlyRent: parseInt(form.monthlyRentFrom) || 0,
+      totalRevenue: 0,
+      dueAmount: 0,
+      image: "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?w=600&h=400&fit=crop",
+      rating: 0,
+      lat: markerPosition.lat,
+      lng: markerPosition.lng,
+      amenities: form.amenities,
+      contactPhone: form.contactPhone,
+      contactEmail: form.contactEmail,
+    });
     setSubmitted(true);
     setTimeout(() => navigate("/owner"), 2000);
   };

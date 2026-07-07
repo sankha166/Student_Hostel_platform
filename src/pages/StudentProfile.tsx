@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   User, Phone, Mail, MapPin, Calendar, Shield, Heart, BookOpen,
-  Camera, Save, ArrowLeft, Home, GraduationCap, Building2,
-  AlertCircle, CheckCircle2, Upload, FileText, Users
+  Camera, Save, ArrowLeft, GraduationCap, FileText,
+  AlertCircle, CheckCircle2, Upload, Users
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 interface StudentProfileData {
   // Personal
@@ -78,7 +80,22 @@ type Section = "personal" | "address" | "education" | "guardian" | "identity" | 
 
 const StudentProfile = () => {
   const navigate = useNavigate();
-  const [profile, setProfile] = useState<StudentProfileData>(defaultProfile);
+  const { user, updateUser } = useAuth();
+  const { toast } = useToast();
+
+  // Load saved profile from localStorage or initialize from auth user
+  const [profile, setProfile] = useState<StudentProfileData>(() => {
+    try {
+      const saved = localStorage.getItem("studentProfile");
+      if (saved) return { ...defaultProfile, ...JSON.parse(saved) };
+    } catch {}
+    return {
+      ...defaultProfile,
+      fullName: user?.name || "",
+      email: user?.email || "",
+      phone: user?.phone || "",
+    };
+  });
   const [activeSection, setActiveSection] = useState<Section>("personal");
   const [saved, setSaved] = useState(false);
   const [searchImage, setIdImage] = useState<File | null>(null);
@@ -93,7 +110,13 @@ const StudentProfile = () => {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    localStorage.setItem("studentProfile", JSON.stringify(profile));
+    // Sync name/email to auth context if changed
+    if (profile.fullName || profile.email) {
+      updateUser({ name: profile.fullName, email: profile.email, phone: profile.phone });
+    }
     setSaved(true);
+    toast({ title: "Profile saved!", description: "Your profile has been updated successfully." });
     setTimeout(() => setSaved(false), 3000);
   };
 

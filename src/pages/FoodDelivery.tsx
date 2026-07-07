@@ -13,10 +13,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import {
-  mockFoodProviders, mockFoodItems, categoryLabels,
-  type FoodProvider, type FoodItem
-} from "@/data/foodDeliveryData";
+import { foodService, type FoodProvider, type FoodItem } from "@/lib/dataService";
+import { categoryLabels } from "@/data/foodDeliveryData";
 
 type View = "browse" | "provider" | "register" | "cart";
 
@@ -41,14 +39,22 @@ const FoodDelivery = () => {
     availableFrom: "08:00", availableTo: "20:00", deliveryRadius: "5"
   });
 
-  const filteredProviders = mockFoodProviders.filter(p =>
+  const [orderPlaced, setOrderPlaced] = useState(false);
+  const [registerDone, setRegisterDone] = useState(false);
+  const [orderLoading, setOrderLoading] = useState(false);
+  const [regLoading, setRegLoading] = useState(false);
+
+  // Load from persistent storage
+  const allProviders = useMemo(() => foodService.getProviders(), []);
+
+  const filteredProviders = allProviders.filter(p =>
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     p.speciality.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const providerItems = useMemo(() => {
     if (!selectedProvider) return [];
-    let items = mockFoodItems.filter(i => i.providerId === selectedProvider.id);
+    let items = foodService.getItems(selectedProvider.id);
     if (categoryFilter !== "all") items = items.filter(i => i.category === categoryFilter);
     return items;
   }, [selectedProvider, categoryFilter]);
@@ -74,17 +80,52 @@ const FoodDelivery = () => {
 
   const getCartQty = (itemId: string) => cart.find(c => c.item.id === itemId)?.qty || 0;
 
-  const handlePlaceOrder = (e: React.FormEvent) => {
+  const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+    setOrderLoading(true);
+    await new Promise(r => setTimeout(r, 800));
+    // Persist order to storage
+    if (selectedProvider) {
+      foodService.placeOrder({
+        studentId: "",
+        studentName: "",
+        providerId: selectedProvider.id,
+        providerName: selectedProvider.name,
+        items: cart.map(c => ({ itemId: c.item.id, name: c.item.name, qty: c.qty, price: c.item.price })),
+        totalAmount: cartTotal,
+        hostelName: orderForm.hostelName,
+        roomNumber: orderForm.roomNumber,
+      });
+    }
+    setOrderLoading(false);
+    setOrderPlaced(true);
+  };
+
+  const handleOrderClose = () => {
     setShowOrderDialog(false);
+    setOrderPlaced(false);
     setCart([]);
     setOrderForm({ hostelName: "", roomNumber: "", phone: "", notes: "" });
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    setRegForm({ name: "", phone: "", email: "", address: "", speciality: "", availableFrom: "08:00", availableTo: "20:00", deliveryRadius: "5" });
-    setView("browse");
+    setRegLoading(true);
+    await new Promise(r => setTimeout(r, 800));
+    // Persist cook registration to storage
+    foodService.registerProvider({
+      name: regForm.name,
+      phone: regForm.phone,
+      email: regForm.email,
+      address: regForm.address,
+      speciality: regForm.speciality,
+      image: "https://images.unsplash.com/photo-1567337710282-00832b415979?w=300&h=200&fit=crop",
+      availableFrom: regForm.availableFrom,
+      availableTo: regForm.availableTo,
+      deliveryRadius: `${regForm.deliveryRadius} km`,
+    });
+    setRegLoading(false);
+    setRegisterDone(true);
   };
 
   return (
@@ -258,66 +299,91 @@ const FoodDelivery = () => {
               <p className="text-muted-foreground">Start serving homemade food to hostel students and earn</p>
             </div>
 
-            <Card className="border-0 shadow-sm">
-              <CardContent className="p-6">
-                <form onSubmit={handleRegister} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="md:col-span-2 space-y-2">
-                      <label className="text-sm font-medium text-foreground">Kitchen / Business Name *</label>
-                      <Input placeholder="e.g. Amma's Kitchen" value={regForm.name} onChange={e => setRegForm(p => ({ ...p, name: e.target.value }))} required className="rounded-xl" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-foreground">Phone Number *</label>
-                      <Input placeholder="+91 XXXXX XXXXX" value={regForm.phone} onChange={e => setRegForm(p => ({ ...p, phone: e.target.value }))} required className="rounded-xl" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-foreground">Email *</label>
-                      <Input type="email" placeholder="email@example.com" value={regForm.email} onChange={e => setRegForm(p => ({ ...p, email: e.target.value }))} required className="rounded-xl" />
-                    </div>
-                    <div className="md:col-span-2 space-y-2">
-                      <label className="text-sm font-medium text-foreground">Kitchen Address *</label>
-                      <Textarea placeholder="Full address of your kitchen" value={regForm.address} onChange={e => setRegForm(p => ({ ...p, address: e.target.value }))} required className="rounded-xl" rows={2} />
-                    </div>
-                    <div className="md:col-span-2 space-y-2">
-                      <label className="text-sm font-medium text-foreground">Speciality / Cuisine *</label>
-                      <Input placeholder="e.g. South Indian, North Indian Thali, Healthy Food..." value={regForm.speciality} onChange={e => setRegForm(p => ({ ...p, speciality: e.target.value }))} required className="rounded-xl" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-foreground">Available From *</label>
-                      <Input type="time" value={regForm.availableFrom} onChange={e => setRegForm(p => ({ ...p, availableFrom: e.target.value }))} required className="rounded-xl" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-foreground">Available To *</label>
-                      <Input type="time" value={regForm.availableTo} onChange={e => setRegForm(p => ({ ...p, availableTo: e.target.value }))} required className="rounded-xl" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-foreground">Delivery Radius (km) *</label>
-                      <Input type="number" min={1} max={20} placeholder="e.g. 5" value={regForm.deliveryRadius} onChange={e => setRegForm(p => ({ ...p, deliveryRadius: e.target.value }))} required className="rounded-xl" />
-                    </div>
+            {registerDone ? (
+              <Card className="border-0 shadow-sm">
+                <CardContent className="p-8 text-center">
+                  <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center mx-auto mb-4">
+                    <CheckCircle2 className="w-8 h-8 text-emerald-600" />
                   </div>
-                  <Separator />
-                  <div className="bg-muted/50 rounded-xl p-4">
-                    <h4 className="font-medium text-foreground text-sm mb-2">📋 What happens next?</h4>
-                    <ul className="text-sm text-muted-foreground space-y-1">
-                      <li>• Our team will verify your kitchen details</li>
-                      <li>• Once approved, you can add your menu items</li>
-                      <li>• Start receiving orders from hostel students</li>
-                      <li>• Payments are settled weekly to your account</li>
-                    </ul>
-                  </div>
-                  <div className="flex justify-end gap-3">
-                    <Button type="button" variant="outline" className="rounded-xl" onClick={() => setView("browse")}>Cancel</Button>
-                    <Button type="submit" className="rounded-xl gap-2"><CheckCircle2 className="w-4 h-4" /> Submit Registration</Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
+                  <h3 className="text-xl font-bold text-foreground mb-2">Registration Submitted!</h3>
+                  <p className="text-muted-foreground mb-1">Thank you, <strong>{regForm.name}</strong>!</p>
+                  <p className="text-sm text-muted-foreground mb-6">Our team will verify your kitchen details and get back to you within 2-3 business days.</p>
+                  <Button className="rounded-xl" onClick={() => { setView("browse"); setRegisterDone(false); setRegForm({ name: "", phone: "", email: "", address: "", speciality: "", availableFrom: "08:00", availableTo: "20:00", deliveryRadius: "5" }); }}>
+                    Back to Browse
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="border-0 shadow-sm">
+                <CardContent className="p-6">
+                  <form onSubmit={handleRegister} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="md:col-span-2 space-y-2">
+                        <label className="text-sm font-medium text-foreground">Kitchen / Business Name *</label>
+                        <Input placeholder="e.g. Amma's Kitchen" value={regForm.name} onChange={e => setRegForm(p => ({ ...p, name: e.target.value }))} required className="rounded-xl" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground">Phone Number *</label>
+                        <Input placeholder="+91 XXXXX XXXXX" value={regForm.phone} onChange={e => setRegForm(p => ({ ...p, phone: e.target.value }))} required className="rounded-xl" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground">Email *</label>
+                        <Input type="email" placeholder="email@example.com" value={regForm.email} onChange={e => setRegForm(p => ({ ...p, email: e.target.value }))} required className="rounded-xl" />
+                      </div>
+                      <div className="md:col-span-2 space-y-2">
+                        <label className="text-sm font-medium text-foreground">Kitchen Address *</label>
+                        <Textarea placeholder="Full address of your kitchen" value={regForm.address} onChange={e => setRegForm(p => ({ ...p, address: e.target.value }))} required className="rounded-xl" rows={2} />
+                      </div>
+                      <div className="md:col-span-2 space-y-2">
+                        <label className="text-sm font-medium text-foreground">Speciality / Cuisine *</label>
+                        <Input placeholder="e.g. South Indian, North Indian Thali, Healthy Food..." value={regForm.speciality} onChange={e => setRegForm(p => ({ ...p, speciality: e.target.value }))} required className="rounded-xl" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground">Available From *</label>
+                        <Input type="time" value={regForm.availableFrom} onChange={e => setRegForm(p => ({ ...p, availableFrom: e.target.value }))} required className="rounded-xl" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground">Available To *</label>
+                        <Input type="time" value={regForm.availableTo} onChange={e => setRegForm(p => ({ ...p, availableTo: e.target.value }))} required className="rounded-xl" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground">Delivery Radius (km) *</label>
+                        <Input type="number" min={1} max={20} placeholder="e.g. 5" value={regForm.deliveryRadius} onChange={e => setRegForm(p => ({ ...p, deliveryRadius: e.target.value }))} required className="rounded-xl" />
+                      </div>
+                    </div>
+                    <Separator />
+                    <div className="bg-muted/50 rounded-xl p-4">
+                      <h4 className="font-medium text-foreground text-sm mb-2">📋 What happens next?</h4>
+                      <ul className="text-sm text-muted-foreground space-y-1">
+                        <li>• Our team will verify your kitchen details</li>
+                        <li>• Once approved, you can add your menu items</li>
+                        <li>• Start receiving orders from hostel students</li>
+                        <li>• Payments are settled weekly to your account</li>
+                      </ul>
+                    </div>
+                    <div className="flex justify-end gap-3">
+                      <Button type="button" variant="outline" className="rounded-xl" onClick={() => setView("browse")}>Cancel</Button>
+                      <Button type="submit" className="rounded-xl gap-2" disabled={regLoading}>
+                        {regLoading ? (
+                          <span className="flex items-center gap-2">
+                            <span className="w-4 h-4 border-2 border-current border-r-transparent rounded-full animate-spin" />
+                            Submitting...
+                          </span>
+                        ) : (
+                          <><CheckCircle2 className="w-4 h-4" /> Submit Registration</>
+                        )}
+                      </Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+            )}
           </div>
         )}
       </main>
 
       {/* Order Dialog */}
-      <Dialog open={showOrderDialog} onOpenChange={setShowOrderDialog}>
+      <Dialog open={showOrderDialog} onOpenChange={v => { if (!v) handleOrderClose(); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -325,53 +391,76 @@ const FoodDelivery = () => {
             </DialogTitle>
             <DialogDescription>Review items and enter delivery details</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            {/* Cart Items */}
-            <div className="space-y-2 max-h-48 overflow-y-auto">
-              {cart.map(c => (
-                <div key={c.item.id} className="flex items-center justify-between p-2 rounded-xl bg-muted/50">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{c.item.name}</p>
-                    <p className="text-xs text-muted-foreground">₹{c.item.price} × {c.qty}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-sm">₹{c.item.price * c.qty}</span>
-                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => removeFromCart(c.item.id)}><X className="w-3 h-3" /></Button>
-                  </div>
-                </div>
-              ))}
+          {orderPlaced ? (
+            <div className="text-center py-8">
+              <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center mx-auto mb-4">
+                <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+              </div>
+              <h3 className="text-lg font-bold text-foreground mb-1">Order Placed!</h3>
+              <p className="text-sm text-muted-foreground mb-1">
+                Your order of ₹{cartTotal} has been sent to <strong>{selectedProvider?.name}</strong>.
+              </p>
+              <p className="text-sm text-muted-foreground mb-4">
+                Delivery to Room {orderForm.roomNumber}, {orderForm.hostelName}
+              </p>
+              <Button className="w-full rounded-xl" onClick={handleOrderClose}>Done</Button>
             </div>
-            <Separator />
-            <div className="flex justify-between font-semibold text-foreground">
-              <span>Total</span>
-              <span>₹{cartTotal}</span>
+          ) : (
+            <div className="space-y-4">
+              {/* Cart Items */}
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {cart.map(c => (
+                  <div key={c.item.id} className="flex items-center justify-between p-2 rounded-xl bg-muted/50">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{c.item.name}</p>
+                      <p className="text-xs text-muted-foreground">₹{c.item.price} × {c.qty}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-sm">₹{c.item.price * c.qty}</span>
+                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => removeFromCart(c.item.id)}>
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <Separator />
+              <div className="flex justify-between font-semibold text-foreground">
+                <span>Total</span><span>₹{cartTotal}</span>
+              </div>
+              <Separator />
+              <form onSubmit={handlePlaceOrder} className="space-y-3">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Hostel / PG Name *</label>
+                  <Input placeholder="e.g. Sunrise Student Haven" value={orderForm.hostelName} onChange={e => setOrderForm(p => ({ ...p, hostelName: e.target.value }))} required className="rounded-xl" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Room No. *</label>
+                    <Input placeholder="e.g. 101-A" value={orderForm.roomNumber} onChange={e => setOrderForm(p => ({ ...p, roomNumber: e.target.value }))} required className="rounded-xl" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Phone *</label>
+                    <Input placeholder="+91 XXXXX" value={orderForm.phone} onChange={e => setOrderForm(p => ({ ...p, phone: e.target.value }))} required className="rounded-xl" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Special Instructions</label>
+                  <Textarea placeholder="Dietary preferences or delivery notes..." value={orderForm.notes} onChange={e => setOrderForm(p => ({ ...p, notes: e.target.value }))} className="rounded-xl" rows={2} />
+                </div>
+                <Button type="submit" className="w-full rounded-xl gap-2" disabled={orderLoading}>
+                  {orderLoading ? (
+                    <span className="flex items-center gap-2">
+                      <span className="w-4 h-4 border-2 border-current border-r-transparent rounded-full animate-spin" />
+                      Placing Order...
+                    </span>
+                  ) : (
+                    <><Truck className="w-4 h-4" /> Place Order — ₹{cartTotal}</>
+                  )}
+                </Button>
+              </form>
             </div>
-            <Separator />
-            {/* Delivery Info */}
-            <form onSubmit={handlePlaceOrder} className="space-y-3">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Hostel / PG Name *</label>
-                <Input placeholder="e.g. Sunrise Student Haven" value={orderForm.hostelName} onChange={e => setOrderForm(p => ({ ...p, hostelName: e.target.value }))} required className="rounded-xl" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Room No. *</label>
-                  <Input placeholder="e.g. 101-A" value={orderForm.roomNumber} onChange={e => setOrderForm(p => ({ ...p, roomNumber: e.target.value }))} required className="rounded-xl" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Phone *</label>
-                  <Input placeholder="+91 XXXXX" value={orderForm.phone} onChange={e => setOrderForm(p => ({ ...p, phone: e.target.value }))} required className="rounded-xl" />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Special Instructions</label>
-                <Textarea placeholder="Any dietary preferences or delivery notes..." value={orderForm.notes} onChange={e => setOrderForm(p => ({ ...p, notes: e.target.value }))} className="rounded-xl" rows={2} />
-              </div>
-              <Button type="submit" className="w-full rounded-xl gap-2">
-                <Truck className="w-4 h-4" /> Place Order — ₹{cartTotal}
-              </Button>
-            </form>
-          </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

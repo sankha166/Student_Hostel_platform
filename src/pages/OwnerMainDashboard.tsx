@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { ownerProperties, propertyTenants, ownerProfile } from "@/data/ownerData";
+import { propertyService, tenantService, profileService } from "@/lib/dataService";
+import { useAuth } from "@/contexts/AuthContext";
 
 const mockNotifications = [
   { id: "n1", text: "New booking request at Sunrise Student Haven", time: "2 hours ago", read: false },
@@ -22,11 +23,17 @@ const mockNotifications = [
 
 const OwnerMainDashboard = () => {
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const [activeSection, setActiveSection] = useState<"overview" | "properties" | "add" | "profile">("overview");
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState(mockNotifications);
 
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  // Read from persistent storage
+  const ownerProperties = useMemo(() => propertyService.getAll(), []);
+  const allTenants = useMemo(() => tenantService.getAll(), []);
+  const ownerProfile = useMemo(() => profileService.getOwnerProfile(), []);
 
   // Aggregate stats
   const totalProperties = ownerProperties.length;
@@ -35,7 +42,7 @@ const OwnerMainDashboard = () => {
   const totalRevenue = ownerProperties.reduce((sum, p) => sum + p.totalRevenue, 0);
   const totalDue = ownerProperties.reduce((sum, p) => sum + p.dueAmount, 0);
   const occupancyRate = totalBeds > 0 ? Math.round((totalOccupied / totalBeds) * 100) : 0;
-  const totalTenants = propertyTenants.length;
+  const totalTenants = allTenants.length;
 
   const stats = [
     { label: "Total Properties", value: totalProperties.toString(), icon: Building2, color: "text-primary", bg: "bg-primary/10" },
@@ -88,7 +95,7 @@ const OwnerMainDashboard = () => {
           ))}
         </nav>
         <div className="p-4 border-t">
-          <Button variant="outline" onClick={() => navigate("/")} className="w-full rounded-xl gap-2">
+          <Button variant="outline" onClick={() => { logout(); navigate("/"); }} className="w-full rounded-xl gap-2">
             <LogOut className="w-4 h-4" /> Log Out
           </Button>
         </div>
@@ -100,7 +107,7 @@ const OwnerMainDashboard = () => {
         <header className="border-b bg-card px-4 md:px-8 py-3 flex items-center justify-between shrink-0">
           <div>
             <h1 className="text-xl md:text-2xl font-bold text-foreground">
-              Welcome back, {ownerProfile.fullName.split(" ")[0]}! 👋
+              Welcome back, {ownerProfile?.fullName?.split(" ")[0] || "Owner"}! 👋
             </h1>
             <p className="text-sm text-muted-foreground">Here's your property portfolio overview</p>
           </div>

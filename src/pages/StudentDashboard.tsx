@@ -1,22 +1,51 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Search, Sliders, Upload, Sparkles, MapPin, Star, ArrowRight, User, LogOut } from "lucide-react";
+import { Search, Sliders, Upload, Sparkles, MapPin, Star, ArrowRight, User, LogOut, Filter, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
-import { hostels } from "@/data/mockData";
+import { hostelService, type Hostel } from "@/lib/dataService";
+import { useAuth } from "@/contexts/AuthContext";
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
+  const { logout, user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [priceRange, setPriceRange] = useState([6000]);
   const [showFilters, setShowFilters] = useState(false);
   const [searchImage, setSearchImage] = useState<File | null>(null);
+  const [selectedLocation, setSelectedLocation] = useState("All Locations");
+  const [selectedFacilities, setSelectedFacilities] = useState<string[]>([]);
 
-  const filteredHostels = hostels.filter((h) => h.price <= priceRange[0]);
+  const LOCATIONS = ["All Locations", "Koramangala", "HSR Layout", "BTM Layout", "Whitefield", "Indiranagar"];
+  const FACILITIES = ["Wi-Fi", "AC", "Meals", "Gym"];
+
+  const toggleFacility = (f: string) => {
+    setSelectedFacilities(prev =>
+      prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f]
+    );
+  };
+
+  const allHostels = useMemo(() => hostelService.getAll(), []);
+
+  const filteredHostels = useMemo(() => allHostels.filter(h => {
+    const matchesPrice = h.price <= priceRange[0];
+    const q = searchQuery.toLowerCase().trim();
+    const matchesSearch = !q ||
+      h.name.toLowerCase().includes(q) ||
+      h.location.toLowerCase().includes(q) ||
+      h.tags.some(t => t.toLowerCase().includes(q)) ||
+      h.facilities.some(f => f.toLowerCase().includes(q)) ||
+      h.whyRecommended.toLowerCase().includes(q);
+    const matchesLocation = selectedLocation === "All Locations" ||
+      h.location.toLowerCase().includes(selectedLocation.toLowerCase());
+    const matchesFacilities = selectedFacilities.length === 0 ||
+      selectedFacilities.every(f => h.facilities.some(hf => hf.toLowerCase().includes(f.toLowerCase())));
+    return matchesPrice && matchesSearch && matchesLocation && matchesFacilities;
+  }), [searchQuery, priceRange, selectedLocation, selectedFacilities]);
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) setSearchImage(e.target.files[0]);
   };
@@ -62,7 +91,7 @@ const StudentDashboard = () => {
           </div>
 
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/student/rent")} className="text-muted-foreground">
+            <Button variant="ghost" size="sm" onClick={() => navigate("/food")} className="text-muted-foreground">
               Food
             </Button>
             <Button variant="ghost" size="sm" onClick={() => navigate("/student/rent")} className="text-muted-foreground">
@@ -74,7 +103,7 @@ const StudentDashboard = () => {
             <Button 
               variant="ghost" 
               size="icon" 
-              onClick={() => navigate("/")}
+              onClick={() => { logout(); navigate("/"); }}
               aria-label="Logout"
             >
               <LogOut size={18} />
@@ -116,32 +145,56 @@ const StudentDashboard = () => {
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="glass-card rounded-2xl p-6 mb-4">
               <div className="grid md:grid-cols-3 gap-6">
                 <div>
-                  <label className="text-sm font-medium text-foreground mb-3 block">Price Range: ₹{priceRange[0]}/mo</label>
+                  <label className="text-sm font-medium text-foreground mb-3 block">Price Range: ₹{priceRange[0].toLocaleString()}/mo</label>
                   <Slider value={priceRange} onValueChange={setPriceRange} max={10000} min={1000} step={500} className="mt-2" />
+                  <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                    <span>₹1,000</span><span>₹10,000</span>
+                  </div>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-foreground mb-3 block">Location</label>
-                  <select className="w-full rounded-xl bg-secondary border-0 px-3 py-2 text-sm">
-                    <option>All Locations</option>
-                    <option>Koramangala</option>
-                    <option>HSR Layout</option>
-                    <option>BTM Layout</option>
-                    <option>Whitefield</option>
-                    <option>Indiranagar</option>
+                  <select
+                    value={selectedLocation}
+                    onChange={e => setSelectedLocation(e.target.value)}
+                    className="w-full rounded-xl bg-secondary border-0 px-3 py-2 text-sm"
+                  >
+                    {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-foreground mb-3 block">Facilities</label>
                   <div className="space-y-2">
-                    {["Wi-Fi", "AC", "Meals", "Gym"].map((f) => (
+                    {FACILITIES.map(f => (
                       <div key={f} className="flex items-center gap-2">
-                        <Checkbox id={f} />
-                        <label htmlFor={f} className="text-sm text-muted-foreground">{f}</label>
+                        <Checkbox
+                          id={f}
+                          checked={selectedFacilities.includes(f)}
+                          onCheckedChange={() => toggleFacility(f)}
+                        />
+                        <label htmlFor={f} className="text-sm text-muted-foreground cursor-pointer">{f}</label>
                       </div>
                     ))}
                   </div>
                 </div>
               </div>
+              {(selectedLocation !== "All Locations" || selectedFacilities.length > 0) && (
+                <div className="flex items-center gap-2 pt-2 border-t border-border">
+                  <span className="text-xs text-muted-foreground">Active filters:</span>
+                  {selectedLocation !== "All Locations" && (
+                    <Badge variant="secondary" className="text-xs gap-1 cursor-pointer" onClick={() => setSelectedLocation("All Locations")}>
+                      {selectedLocation} <X size={10} />
+                    </Badge>
+                  )}
+                  {selectedFacilities.map(f => (
+                    <Badge key={f} variant="secondary" className="text-xs gap-1 cursor-pointer" onClick={() => toggleFacility(f)}>
+                      {f} <X size={10} />
+                    </Badge>
+                  ))}
+                  <Button variant="ghost" size="sm" className="h-6 text-xs ml-auto" onClick={() => { setSelectedLocation("All Locations"); setSelectedFacilities([]); }}>
+                    Clear all
+                  </Button>
+                </div>
+              )}
             </motion.div>
           )}
 
@@ -161,9 +214,20 @@ const StudentDashboard = () => {
           <div className="flex items-center gap-2 mb-6">
             <img src="/iconn.png" alt="HostelAI Logo" className="w-6 h-6 object-contain" />
             <h2 className="text-xl font-semibold text-foreground">AI Recommendations</h2>
+            <Badge variant="outline" className="ml-auto">{filteredHostels.length} results</Badge>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredHostels.length === 0 ? (
+            <div className="text-center py-16">
+              <Search className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-40" />
+              <h3 className="text-lg font-semibold text-foreground mb-2">No hostels found</h3>
+              <p className="text-muted-foreground mb-4">Try adjusting your search or filters</p>
+              <Button variant="outline" className="rounded-xl" onClick={() => { setSearchQuery(""); setPriceRange([6000]); setSelectedLocation("All Locations"); setSelectedFacilities([]); }}>
+                Clear Filters
+              </Button>
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredHostels.map((hostel, i) => (
               <motion.div
                 key={hostel.id}
@@ -215,7 +279,8 @@ const StudentDashboard = () => {
                 </div>
               </motion.div>
             ))}
-          </div>
+            </div>
+          )}
         </motion.div>
       </div>
     </div>

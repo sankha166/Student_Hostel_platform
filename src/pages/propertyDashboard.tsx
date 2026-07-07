@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -16,17 +16,18 @@ import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
 import {
-  ownerProperties, propertyRooms, propertyTenants,
-  type PropertyRoom, type PropertyTenant, type OwnerProperty
-} from "@/data/ownerData";
-import {
-  bookingRequests as initialRequests, paymentAccounts as initialAccounts,
-  type BookingRequest, type PaymentAccount
-} from "@/data/ownerMockCompat";
-import AllocationDialog, { AllocationData } from "@/components/AllocationDialog"; // Adjust path as needed
+  propertyService, roomService, tenantService, bookingService,
+  paymentAccountService, billService,
+  type OwnerProperty, type PropertyRoom, type PropertyTenant,
+  type BookingRequest, type PaymentAccount, type OtherBill
+} from "@/lib/dataService";
+import AllocationDialog, { AllocationData } from "@/components/AllocationDialog";
+import { billTypeLabels, billTypeColors } from "@/data/billsData";
+import { downloadReceipt } from "@/lib/receiptGenerator";
 
-type Tab = "dashboard" | "rooms" | "tenants" | "requests" | "payments" | "edit";
+type Tab = "dashboard" | "rooms" | "tenants" | "requests" | "payments" | "bills" | "edit";
 
 // Mock payment history for tenants
 const generatePaymentHistory = (tenant: PropertyTenant) => {
@@ -62,10 +63,11 @@ const mockNotifications = [
 const PropertyDashboard = () => {
   const navigate = useNavigate();
   const { propertyId } = useParams<{ propertyId: string }>();
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
   const [searchQuery, setSearchQuery] = useState("");
-  const [requests, setRequests] = useState(initialRequests);
-  const [accounts, setAccounts] = useState(initialAccounts);
+  const [requests, setRequests] = useState<BookingRequest[]>([]);
+  const [accounts, setAccounts] = useState<PaymentAccount[]>([]);
   const [showAddAccount, setShowAddAccount] = useState(false);
   const [showAllocation, setShowAllocation] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<BookingRequest | null>(null);
@@ -79,10 +81,21 @@ const PropertyDashboard = () => {
     roomNumber: "", floor: "", type: "Single" as PropertyRoom["type"],
     capacity: 1, price: 0, amenities: ""
   });
-  const [rooms, setRooms] = useState<PropertyRoom[]>(propertyRooms);
+  const [rooms, setRooms] = useState<PropertyRoom[]>([]);
+  const [tenants, setTenants] = useState<PropertyTenant[]>([]);
 
-  // Edit property state
-  const property = ownerProperties.find(p => p.id === propertyId);
+  // Bills state
+  const [bills, setBills] = useState<OtherBill[]>([]);
+  const [newBill, setNewBill] = useState({
+    billType: "electricity" as OtherBill["billType"],
+    title: "", description: "", amount: "", dueDate: "",
+    billingCycle: "monthly" as OtherBill["billingCycle"],
+    applicableRooms: ""
+  });
+  const [showAddBill, setShowAddBill] = useState(false);
+
+  // Load from persistent storage
+  const property = propertyService.getById(propertyId || "");
   const [editForm, setEditForm] = useState<Partial<OwnerProperty>>(property || {});
 
   // New account form
@@ -90,8 +103,19 @@ const PropertyDashboard = () => {
     type: "upi", label: "", upiId: "", bankName: "", accountNumber: "", ifsc: "", holderName: "", isPrimary: false
   });
 
-  const propRooms = useMemo(() => rooms.filter(r => r.propertyId === propertyId), [rooms, propertyId]);
-  const propTenants = useMemo(() => propertyTenants.filter(t => t.propertyId === propertyId), [propertyId]);
+  // Load persistent data on mount
+  useEffect(() => {
+    if (propertyId) {
+      setRooms(roomService.getByProperty(propertyId));
+      setTenants(tenantService.getByProperty(propertyId));
+      setBills(billService.getByProperty(propertyId));
+    }
+    setRequests(bookingService.getAll());
+    setAccounts(paymentAccountService.getAll());
+  }, [propertyId]);
+
+  const propRooms = useMemo(() => rooms, [rooms]);
+  const propTenants = useMemo(() => tenants, [tenants]);
   
   const freeRooms = useMemo(() => 
   propRooms.filter(r => r.status === "available"), 
@@ -138,6 +162,7 @@ const PropertyDashboard = () => {
     { id: "tenants" as const, label: "Tenants", icon: Users },
     { id: "requests" as const, label: "Requests", icon: ClipboardList, badge: pendingRequestsCount },
     { id: "payments" as const, label: "Payments", icon: CreditCard },
+    { id: "bills" as const, label: "Bills", icon: Banknote },
     { id: "edit" as const, label: "Edit Hostel Details", icon: Edit },
   ];
 
@@ -147,29 +172,44 @@ const PropertyDashboard = () => {
       setSelectedRoom("");
       setShowAllocation(true);
     } else {
-      setRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: "accepted" as const } : r));
+      bookingService.updateStatus(req.id, "accepted");
+      setRequests(bookingService.getAll());
     }
   };
 
   const handleRejectRequest = (reqId: string) => {
-    setRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: "rejected" as const } : r));
+    bookingService.updateStatus(reqId, "rejected");
+    setRequests(bookingService.getAll());
   };
 
 const handleAllocationConfirm = (data: AllocationData) => {
   if (selectedRequest) {
-    // 1. Update the request status to accepted
-    setRequests(prev => prev.map(r => 
-      r.id === selectedRequest.id ? { ...r, status: "accepted" as const } : r
-    ));
+    // 1. Update the request status to accepted — persisted
+    bookingService.updateStatus(selectedRequest.id, "accepted");
+    setRequests(bookingService.getAll());
 
-    // 2. Update the room status to occupied
-    setRooms(prev => prev.map(r => 
-      (r.id === data.room || r.roomNumber === data.room) 
-        ? { ...r, status: "occupied" as const, currentOccupancy: r.currentOccupancy + 1 } 
-        : r
-    ));
+    // 2. Update the room status — persisted
+    const room = rooms.find(r => r.id === data.room || r.roomNumber === data.room);
+    if (room) {
+      roomService.update(room.id, { status: "occupied" as const, currentOccupancy: room.currentOccupancy + 1 });
+    }
 
-    // Note: In a real app, you would save the allocation to the database
+    // 3. Add tenant — persisted
+    tenantService.add({
+      propertyId: propertyId!,
+      name: selectedRequest.studentName,
+      phone: selectedRequest.phone,
+      email: selectedRequest.email || "",
+      room: room?.roomNumber || data.room,
+      joinDate: data.startDate,
+      rentAmount: data.price,
+      rentStatus: "Pending",
+    });
+
+    // Refresh local state
+    setRooms(roomService.getByProperty(propertyId!));
+    setTenants(tenantService.getByProperty(propertyId!));
+    toast({ title: "Room allocated!", description: `${selectedRequest.studentName} has been assigned to Room ${room?.roomNumber || data.room}.` });
   }
   
   setSelectedRequest(null);
@@ -178,8 +218,8 @@ const handleAllocationConfirm = (data: AllocationData) => {
 
   const handleAddRoom = (e: React.FormEvent) => {
     e.preventDefault();
-    const room: PropertyRoom = {
-      id: `r-new-${Date.now()}`,
+    // Persist new room to storage
+    roomService.add({
       propertyId: propertyId!,
       roomNumber: newRoom.roomNumber,
       floor: newRoom.floor,
@@ -189,15 +229,16 @@ const handleAllocationConfirm = (data: AllocationData) => {
       price: newRoom.price,
       status: "available",
       amenities: newRoom.amenities.split(",").map(a => a.trim()).filter(Boolean),
-    };
-    setRooms(prev => [...prev, room]);
+    });
+    setRooms(roomService.getByProperty(propertyId!));
     setNewRoom({ roomNumber: "", floor: "", type: "Single", capacity: 1, price: 0, amenities: "" });
+    toast({ title: "Room added!", description: `Room ${newRoom.roomNumber} has been created.` });
   };
 
   const handleAddAccount = (e: React.FormEvent) => {
     e.preventDefault();
-    const acc: PaymentAccount = {
-      id: `pa-${Date.now()}`,
+    // Persist payment account to storage
+    const acc = paymentAccountService.add({
       type: newAccount.type || "upi",
       label: newAccount.label || "",
       upiId: newAccount.upiId,
@@ -206,43 +247,63 @@ const handleAllocationConfirm = (data: AllocationData) => {
       ifsc: newAccount.ifsc,
       holderName: newAccount.holderName,
       isPrimary: accounts.length === 0,
-    };
-    setAccounts(prev => [...prev, acc]);
+    });
+    setAccounts(paymentAccountService.getAll());
     setShowAddAccount(false);
     setNewAccount({ type: "upi", label: "", upiId: "", bankName: "", accountNumber: "", ifsc: "", holderName: "", isPrimary: false });
+    toast({ title: "Payment account added!", description: `${acc.label} has been added successfully.` });
   };
 
   const markAllRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
 
-  const handleDownloadReceipt = (tenant: PropertyTenant, month: string, year: number, amount: number, txnId?: string) => {
-    const receipt = `
-═══════════════════════════════════════
-         PAYMENT RECEIPT
-═══════════════════════════════════════
-Property: ${property.name}
-Location: ${property.location}
-
-Tenant: ${tenant.name}
-Room: ${tenant.room}
-Month: ${month} ${year}
-
-Amount Paid: ₹${amount.toLocaleString()}
-Transaction ID: ${txnId || "N/A"}
-Status: PAID
-
-Generated on: ${new Date().toLocaleDateString()}
-═══════════════════════════════════════
-    `;
-    const blob = new Blob([receipt], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Receipt_${tenant.name.replace(/\s/g, "_")}_${month}_${year}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleAddBill = (e: React.FormEvent) => {
+    e.preventDefault();
+    // Persist bill to storage
+    billService.add({
+      propertyId: propertyId!,
+      billType: newBill.billType,
+      title: newBill.title,
+      description: newBill.description,
+      amount: parseFloat(newBill.amount) || 0,
+      applicableRooms: newBill.applicableRooms.split(",").map(r => r.trim()).filter(Boolean),
+      dueDate: newBill.dueDate,
+      status: "active",
+      billingCycle: newBill.billingCycle,
+    });
+    setBills(billService.getByProperty(propertyId!));
+    setNewBill({ billType: "electricity", title: "", description: "", amount: "", dueDate: "", billingCycle: "monthly", applicableRooms: "" });
+    setShowAddBill(false);
+    toast({ title: "Bill created!", description: `${newBill.title} has been added.` });
   };
+
+  const handleDownloadReceipt = (tenant: PropertyTenant, month: string, year: number, amount: number, txnId?: string) => {
+    downloadReceipt({
+      receiptNo: `RN-${tenant.id}-${month}${year}`,
+      propertyName: property?.name || "Property",
+      propertyAddress: property?.address,
+      tenantName: tenant.name,
+      roomNumber: tenant.room,
+      month,
+      year,
+      amount,
+      transactionId: txnId,
+      paidDate: new Date().toLocaleDateString("en-IN"),
+      paymentMethod: "UPI",
+    });
+  };
+
+  if (!property) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <p className="text-muted-foreground mb-4">Property not found</p>
+          <Button onClick={() => navigate("/owner")}>Back to Dashboard</Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex bg-background">
@@ -554,6 +615,16 @@ Generated on: ${new Date().toLocaleDateString()}
                                 )}
                               </div>
                             </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-xs gap-1"
+                                onClick={() => setActiveTab("bills")}
+                              >
+                                <Banknote className="w-3 h-3" /> Bills
+                              </Button>
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -799,6 +870,160 @@ Generated on: ${new Date().toLocaleDateString()}
             </div>
           )}
 
+          {/* Bills Tab */}
+          {activeTab === "bills" && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-foreground">Bills & Charges</h2>
+                  <p className="text-sm text-muted-foreground">Manage electricity, water, maintenance and other charges</p>
+                </div>
+                <Button onClick={() => setShowAddBill(!showAddBill)} className="rounded-xl gap-2">
+                  <Plus className="w-4 h-4" /> Add Bill
+                </Button>
+              </div>
+
+              {showAddBill && (
+                <Card className="border-0 shadow-sm">
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Plus className="w-5 h-5 text-primary" /> Create New Bill
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <form onSubmit={handleAddBill} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground">Bill Type *</label>
+                        <select value={newBill.billType} onChange={e => setNewBill(p => ({ ...p, billType: e.target.value as OtherBill["billType"] }))} className="w-full h-10 rounded-xl border border-input bg-background px-3 text-sm">
+                          {(Object.entries(billTypeLabels) as [OtherBill["billType"], string][]).map(([k, v]) => (
+                            <option key={k} value={k}>{v}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground">Billing Cycle *</label>
+                        <select value={newBill.billingCycle} onChange={e => setNewBill(p => ({ ...p, billingCycle: e.target.value as OtherBill["billingCycle"] }))} className="w-full h-10 rounded-xl border border-input bg-background px-3 text-sm">
+                          <option value="one-time">One-time</option>
+                          <option value="monthly">Monthly</option>
+                          <option value="quarterly">Quarterly</option>
+                        </select>
+                      </div>
+                      <div className="md:col-span-2 space-y-2">
+                        <label className="text-sm font-medium text-foreground">Bill Title *</label>
+                        <Input placeholder="e.g. April Electricity Bill" value={newBill.title} onChange={e => setNewBill(p => ({ ...p, title: e.target.value }))} required className="rounded-xl" />
+                      </div>
+                      <div className="md:col-span-2 space-y-2">
+                        <label className="text-sm font-medium text-foreground">Description</label>
+                        <Input placeholder="Brief description of the bill" value={newBill.description} onChange={e => setNewBill(p => ({ ...p, description: e.target.value }))} className="rounded-xl" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground">Amount (₹) *</label>
+                        <Input type="number" min={0} placeholder="e.g. 450" value={newBill.amount} onChange={e => setNewBill(p => ({ ...p, amount: e.target.value }))} required className="rounded-xl" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground">Due Date *</label>
+                        <Input type="date" value={newBill.dueDate} onChange={e => setNewBill(p => ({ ...p, dueDate: e.target.value }))} required className="rounded-xl" />
+                      </div>
+                      <div className="md:col-span-2 space-y-2">
+                        <label className="text-sm font-medium text-foreground">Applicable Rooms (comma separated)</label>
+                        <Input placeholder="e.g. 101-A, 102-B, 103-A (leave blank for all rooms)" value={newBill.applicableRooms} onChange={e => setNewBill(p => ({ ...p, applicableRooms: e.target.value }))} className="rounded-xl" />
+                      </div>
+                      <div className="md:col-span-2 flex justify-end gap-3">
+                        <Button type="button" variant="outline" className="rounded-xl" onClick={() => setShowAddBill(false)}>Cancel</Button>
+                        <Button type="submit" className="rounded-xl gap-2"><Plus className="w-4 h-4" /> Create Bill</Button>
+                      </div>
+                    </form>
+                  </CardContent>
+                </Card>
+              )}
+
+              <Card className="border-0 shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-lg">All Bills ({bills.length})</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {bills.length === 0 ? (
+                    <div className="py-12 text-center text-muted-foreground">
+                      <Banknote className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                      <p>No bills yet. Add your first bill above.</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Title</TableHead>
+                            <TableHead>Amount</TableHead>
+                            <TableHead>Cycle</TableHead>
+                            <TableHead>Due Date</TableHead>
+                            <TableHead>Rooms</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Action</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {bills.map(bill => {
+                            const typeColor = billTypeColors[bill.billType];
+                            return (
+                              <TableRow key={bill.id}>
+                                <TableCell>
+                                  <span className={`inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium ${typeColor.bg} ${typeColor.text}`}>
+                                    {billTypeLabels[bill.billType]}
+                                  </span>
+                                </TableCell>
+                                <TableCell>
+                                  <div>
+                                    <p className="font-medium text-foreground text-sm">{bill.title}</p>
+                                    {bill.description && <p className="text-xs text-muted-foreground">{bill.description}</p>}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="font-semibold">₹{bill.amount.toLocaleString()}</TableCell>
+                                <TableCell className="capitalize">{bill.billingCycle}</TableCell>
+                                <TableCell>{bill.dueDate}</TableCell>
+                                <TableCell>
+                                  {bill.applicableRooms.length === 0 ? (
+                                    <Badge variant="outline" className="text-xs">All Rooms</Badge>
+                                  ) : (
+                                    <div className="flex gap-1 flex-wrap">
+                                      {bill.applicableRooms.slice(0, 2).map(r => (
+                                        <Badge key={r} variant="outline" className="text-xs">{r}</Badge>
+                                      ))}
+                                      {bill.applicableRooms.length > 2 && (
+                                        <Badge variant="outline" className="text-xs">+{bill.applicableRooms.length - 2}</Badge>
+                                      )}
+                                    </div>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant={bill.status === "paid" ? "default" : bill.status === "overdue" ? "destructive" : "secondary"}>
+                                    {bill.status}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  {bill.status === "active" && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="rounded-xl text-xs gap-1"
+                                      onClick={() => { billService.updateStatus(bill.id, "paid"); setBills(billService.getByProperty(propertyId!)); }}
+                                    >
+                                      <CheckCircle2 className="w-3 h-3" /> Mark Paid
+                                    </Button>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           {/* Edit Hostel Details Tab */}
           {activeTab === "edit" && (
             <div className="space-y-6 max-w-3xl">
@@ -810,7 +1035,11 @@ Generated on: ${new Date().toLocaleDateString()}
                   <CardDescription>Update your hostel/PG information. Changes will reflect across the platform.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <form className="space-y-6" onSubmit={e => { e.preventDefault(); /* Save logic */ }}>
+                  <form className="space-y-6" onSubmit={e => {
+                    e.preventDefault();
+                    if (propertyId) { propertyService.update(propertyId, editForm); }
+                    toast({ title: "Property updated!", description: "Your changes have been saved." });
+                  }}>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <label className="text-sm font-medium text-foreground">Property Name *</label>

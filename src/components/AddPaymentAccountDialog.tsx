@@ -4,7 +4,7 @@ import { X, Plus, Smartphone, Building, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { PaymentAccount } from "@/data/mockData";
+import { PaymentAccount } from "@/data/ownerMockCompat";
 
 interface AddPaymentAccountDialogProps {
   open: boolean;
