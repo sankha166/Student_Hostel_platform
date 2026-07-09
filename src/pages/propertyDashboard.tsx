@@ -19,7 +19,7 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import {
   propertyService, roomService, tenantService, bookingService,
-  paymentAccountService, billService,
+  paymentAccountService, billService, rentService,
   type OwnerProperty, type PropertyRoom, type PropertyTenant,
   type BookingRequest, type PaymentAccount, type OtherBill
 } from "@/lib/dataService";
@@ -1232,6 +1232,113 @@ const handleAllocationConfirm = (data: AllocationData) => {
               <Button type="submit" className="rounded-xl gap-1"><Plus className="w-4 h-4" /> Add Account</Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+      {/* Tenant Detail Dialog */}
+      <Dialog open={!!selectedTenant} onOpenChange={v => { if (!v) setSelectedTenant(null); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          {selectedTenant && (() => {
+            const paymentHistory = generatePaymentHistory(selectedTenant);
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                      <span className="text-lg font-bold text-primary">{selectedTenant.name.charAt(0)}</span>
+                    </div>
+                    <div>
+                      <p className="text-lg">{selectedTenant.name}</p>
+                      <p className="text-sm text-muted-foreground font-normal">Room {selectedTenant.room}</p>
+                    </div>
+                  </DialogTitle>
+                </DialogHeader>
+
+                {/* Tenant Info */}
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-muted-foreground" /> <span>{selectedTenant.phone}</span></div>
+                  <div className="flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-muted-foreground" /> <span className="truncate">{selectedTenant.email}</span></div>
+                  <div className="flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-muted-foreground" /> <span>Joined: {selectedTenant.joinDate}</span></div>
+                  <div className="flex items-center gap-2"><IndianRupee className="w-3.5 h-3.5 text-muted-foreground" /> <span>₹{selectedTenant.rentAmount}/month</span></div>
+                </div>
+
+                <Separator />
+
+                {/* Current Status */}
+                <div className="flex items-center justify-between p-3 rounded-xl bg-muted/50">
+                  <div>
+                    <p className="text-sm font-medium">Current Month Status</p>
+                    <Badge variant={selectedTenant.rentStatus === "Paid" ? "default" : "destructive"} className="mt-1">
+                      {selectedTenant.rentStatus}
+                    </Badge>
+                  </div>
+                  {selectedTenant.rentStatus !== "Paid" && (
+                    <Button size="sm" className="rounded-xl gap-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => {
+                      // Mark as paid cash in rent ledger
+                      const payments = rentService.getAll();
+                      const pending = payments.find((p: any) => p.status === "Pending");
+                      if (pending) rentService.markAsPaidCash(pending.id, "Owner");
+                      // Update tenant status
+                      tenantService.update(selectedTenant.id, { rentStatus: "Paid" });
+                      setTenants(tenantService.getByProperty(propertyId || ""));
+                      setSelectedTenant({ ...selectedTenant, rentStatus: "Paid" });
+                      toast({ title: "Marked as Paid (Cash)", description: `${selectedTenant.name}'s rent has been marked as paid via cash.` });
+                    }}>
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Mark Paid (Cash)
+                    </Button>
+                  )}
+                </div>
+
+                <Separator />
+
+                {/* Payment History */}
+                <div>
+                  <h4 className="font-medium text-sm mb-3">Payment History</h4>
+                  <div className="space-y-2">
+                    {paymentHistory.map(p => (
+                      <div key={p.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/30 text-sm">
+                        <div className="flex items-center gap-2">
+                          {p.status === "Paid" ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                          ) : (
+                            <Clock className="w-4 h-4 text-amber-500" />
+                          )}
+                          <div>
+                            <p className="font-medium">{p.month} {p.year}</p>
+                            {p.transactionId && <p className="text-xs text-muted-foreground font-mono">TXN: {p.transactionId}</p>}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium">₹{p.amount.toLocaleString()}</p>
+                          <Badge variant={p.status === "Paid" ? "default" : "secondary"} className={`text-[10px] h-4 ${p.status === "Paid" ? "bg-emerald-500 border-0" : ""}`}>
+                            {p.status}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <DialogFooter>
+                  <Button variant="outline" className="rounded-xl gap-1" onClick={() => {
+                    downloadReceipt({
+                      receiptNo: `RN-${selectedTenant.id.toUpperCase()}`,
+                      propertyName: property?.name || "Property",
+                      tenantName: selectedTenant.name,
+                      roomNumber: selectedTenant.room,
+                      month: new Date().toLocaleDateString("en-IN", { month: "long", year: "numeric" }),
+                      amount: selectedTenant.rentAmount,
+                      transactionId: paymentHistory.find(p => p.status === "Paid")?.transactionId,
+                      paidDate: new Date().toLocaleDateString("en-IN"),
+                      paymentMethod: "UPI",
+                    });
+                  }}>
+                    <Download className="w-3.5 h-3.5" /> Download Receipt
+                  </Button>
+                  <Button className="rounded-xl" onClick={() => setSelectedTenant(null)}>Close</Button>
+                </DialogFooter>
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>
