@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { propertyService, tenantService, profileService } from "@/lib/dataService";
 import { useAuth } from "@/contexts/AuthContext";
+import { propertyTenants } from "@/data/ownerData";
 
 const mockNotifications = [
   { id: "n1", text: "New booking request at Sunrise Student Haven", time: "2 hours ago", read: false },
@@ -83,11 +84,10 @@ const OwnerMainDashboard = () => {
                 else if (item.id === "profile") navigate("/owner/profile");
                 else setActiveSection(item.id);
               }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                activeSection === item.id
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeSection === item.id
                   ? "bg-primary text-primary-foreground shadow-md"
                   : "hover:bg-muted text-muted-foreground"
-              }`}
+                }`}
             >
               <item.icon className="w-5 h-5" />
               {item.label}

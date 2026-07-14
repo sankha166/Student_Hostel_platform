@@ -35,7 +35,7 @@ const CTASection = () => {
                 size="lg"
                 variant="outline"
                 onClick={() => navigate("/auth?role=owner")}
-                className="border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/10 rounded-xl gap-2"
+                className="border-primary-foreground/30  hover:bg-primary-foreground/10 rounded-xl gap-2"
               >
                 Owner Login <ArrowRight size={18} />
               </Button>
