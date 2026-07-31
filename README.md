@@ -118,6 +118,4 @@ src/
     └── FoodDelivery.tsx
 ```
 
-## License
 
-MIT — Built for hackathon.
