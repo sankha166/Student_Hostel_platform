@@ -2,6 +2,21 @@
 
 AI-powered student hostel & PG finder platform with a full owner management dashboard and home food delivery.
 
+## Project status
+
+The frontend started as a localStorage/demo application. The production migration is now being implemented incrementally on the `feature/production-mvp-foundation` branch so the existing UI is preserved while real backend capabilities are introduced and tested one layer at a time.
+
+### Migration roadmap
+
+- [x] Phase 1 — Express API foundation, environment validation, security headers, CORS, health endpoint
+- [ ] Phase 2 — Database schema and persistence
+- [ ] Phase 3 — Authentication and Student/Owner/Admin authorization
+- [ ] Phase 4 — Real property, room, tenant and booking APIs
+- [ ] Phase 5 — Payments, bills and receipts
+- [ ] Phase 6 — Property verification, reviews and moderation
+- [ ] Phase 7 — AI search/recommendation integrations
+- [ ] Phase 8 — Production testing, deployment and security hardening
+
 ## Features
 
 ### For Students
@@ -37,85 +52,101 @@ AI-powered student hostel & PG finder platform with a full owner management dash
 - **Styling**: Tailwind CSS + shadcn/ui
 - **Animations**: Framer Motion
 - **Routing**: React Router v6
-- **State**: React hooks + localStorage (demo mode)
+- **State**: React hooks + localStorage during migration
 - **Maps**: Google Maps API (`@react-google-maps/api`)
 - **Icons**: Lucide React
 - **Forms**: React Hook Form + Zod
+- **Backend**: Node.js + Express + TypeScript
+- **Validation**: Zod
+- **Security middleware**: Helmet + CORS
 
 ## Getting Started
 
-### Prerequisites
-- Node.js 18+ or Bun
-- Google Maps API key
+### Frontend
 
-### Setup
+Requirements: Node.js 18+ or Bun.
 
 ```bash
-# Install dependencies
 npm install
-
-# Copy env file
 cp .env.example .env
-
-# Fill in your Google Maps API key
-VITE_GOOGLE_MAPS_API_KEY=your_key_here
-
-# Start dev server
 npm run dev
 ```
 
-### Environment Variables
+### Backend
+
+Requirements: Node.js 20+.
+
+```bash
+cd backend
+npm install
+cp .env.example .env
+npm run dev
+```
+
+Health check:
+
+```text
+GET http://localhost:3000/api/v1/health
+```
+
+The frontend should use the backend base URL through `VITE_API_URL` once API migration begins.
+
+## Environment Variables
+
+### Frontend
 
 | Variable | Required | Description |
 |---|---|---|
-| `VITE_GOOGLE_MAPS_API_KEY` | Yes (for maps) | Google Maps JavaScript API key |
-| `VITE_API_URL` | No | Backend API URL (defaults to localhost:3000) |
-| `VITE_AI_SERVICE_URL` | No | AI service URL (defaults to localhost:5000) |
+| `VITE_GOOGLE_MAPS_API_KEY` | Yes for maps | Google Maps JavaScript API key |
+| `VITE_API_URL` | No | Backend API URL |
+| `VITE_AI_SERVICE_URL` | No | AI service URL when AI integration is enabled |
 
-## Build for Production
+### Backend
 
-```bash
-npm run build
-# Output is in dist/
+See [`backend/.env.example`](backend/.env.example). Secrets must not be committed to Git.
+
+## Production architecture
+
+```text
+React + TypeScript
+        |
+        | REST / HTTPS
+        v
+Node.js + Express API
+        |
+        +-- Authentication & authorization
+        +-- Request validation
+        +-- Business services
+        +-- Database repositories
+        +-- Payments / webhooks
+        +-- AI integrations
+        |
+        v
+     Database
 ```
-
-## Deploy to Netlify
-
-1. Push to GitHub
-2. Connect repo in Netlify dashboard
-3. Set build command: `npm run build`
-4. Set publish directory: `dist`
-5. Add environment variables in Netlify settings
-6. Deploy!
-
-The `netlify.toml` is already configured for SPA routing.
-
-## Demo Mode
-
-The app ships with full mock data and works completely offline without a backend. Authentication stores session in `localStorage`. All CRUD operations update local state (no persistence between refreshes for demo).
 
 ## Project Structure
 
-```
-src/
-├── components/       # Shared UI components
-│   ├── landing/      # Landing page sections
-│   └── ui/           # shadcn/ui primitives
-├── data/             # Mock data (hostels, owners, food, bills)
-├── hooks/            # useAuth, useMobile, useToast
-├── lib/              # api.ts, constants.ts, utils.ts
-└── pages/            # Route-level page components
-    ├── Index.tsx           # Landing page
-    ├── AuthPage.tsx        # Login/Signup
-    ├── StudentDashboard.tsx
-    ├── HostelDetail.tsx
-    ├── RentPage.tsx
-    ├── StudentProfile.tsx
-    ├── OwnerMainDashboard.tsx
-    ├── propertyDashboard.tsx
-    ├── AddProperty.tsx
-    ├── OwnerProfile.tsx
-    └── FoodDelivery.tsx
+```text
+src/                         # Existing React frontend
+├── components/
+├── data/
+├── hooks/
+├── lib/
+└── pages/
+
+backend/                     # Production API (migration in progress)
+├── src/
+│   ├── config/
+│   │   └── env.ts
+│   ├── app.ts
+│   └── server.ts
+├── .env.example
+├── package.json
+├── tsconfig.json
+└── README.md
 ```
 
+## Demo mode
 
+The existing frontend demo mode remains available while migration is in progress. It will be retired feature-by-feature only after the corresponding backend functionality has been implemented and tested.
