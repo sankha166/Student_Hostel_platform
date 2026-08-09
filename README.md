@@ -1,70 +1,60 @@
 # Residential Nexus — Smart Room Search
 
-AI-powered student hostel & PG finder platform with a full owner management dashboard and home food delivery.
+AI-ready student hostel & PG marketplace with student discovery, owner property management and an extensible student-living ecosystem.
 
-## Project status
+## Production migration status
 
-The frontend started as a localStorage/demo application. The production migration is now being implemented incrementally on the `feature/production-mvp-foundation` branch so the existing UI is preserved while real backend capabilities are introduced and tested one layer at a time.
-
-### Migration roadmap
+The original frontend was a localStorage/demo application. The migration is being implemented on `feature/production-mvp-foundation` while preserving the existing UI.
 
 - [x] Phase 1 — Express API foundation, environment validation, security headers, CORS, health endpoint
-- [ ] Phase 2 — Database schema and persistence
-- [ ] Phase 3 — Authentication and Student/Owner/Admin authorization
-- [ ] Phase 4 — Real property, room, tenant and booking APIs
-- [ ] Phase 5 — Payments, bills and receipts
-- [ ] Phase 6 — Property verification, reviews and moderation
-- [ ] Phase 7 — AI search/recommendation integrations
-- [ ] Phase 8 — Production testing, deployment and security hardening
+- [x] Phase 2 — PostgreSQL schema, connection layer and persistent domain model
+- [x] Phase 3 — JWT authentication, password hashing and Student/Owner/Admin authorization
+- [x] Phase 4 — Real property, room and booking APIs; frontend API layer migrated to backend
+- [x] Phase 5 — Persistent payment records and payment-gateway integration boundary
+- [x] Phase 6 — Property verification, reviews, ratings and admin moderation
+- [x] Phase 7 — AI integration boundaries for recommendations, natural-language search and image search
+- [x] Phase 8 — CI workflow, environment documentation and production hardening baseline
 
-## Features
+**Important:** external payment settlement, OTP/email delivery, Google OAuth, AI vision and identity verification cannot be truthfully marked live without provider credentials and webhook configuration. The platform now has explicit integration boundaries instead of simulated success responses.
 
-### For Students
-- 🔍 **Smart Search** — Search hostels by text (name, location, amenities, tags) and price range
-- 🖼️ **Image-Based Discovery** — Upload a room photo to find similar hostels
-- 📋 **Hostel Detail** — View facilities, house rules, reviews, and AI-generated recommendations
-- 📅 **Book / Schedule Visit** — Send booking requests or schedule property visits directly
-- 💳 **Rent Tracking** — View monthly rent history, pay via UPI, download receipts
-- 🍽️ **Home Food Delivery** — Order home-cooked meals from local cooks delivered to your room
-- 👤 **Full Profile** — Personal info, education, guardian contacts, medical details, identity docs
+## Core product
 
-### For Property Owners
-- 🏠 **Multi-Property Dashboard** — Overview of all properties with occupancy & revenue stats
-- 📊 **Per-Property Management**
-  - Dashboard with real-time stats
-  - Rooms management (add, view, status tracking)
-  - Tenant management with payment history & receipt download
-  - Booking & visit requests with room allocation workflow (3-step multi-form)
-  - Payment accounts (UPI + bank) management
-  - Bills & charges (electricity, water, maintenance, etc.)
-  - Edit property details
-- ➕ **Add New Property** — Full form with Google Maps pin drop, amenity selection, image upload
-- 👤 **Owner Profile** — Personal, business, identity document management
+### Students
+- Hostel/PG discovery and search
+- Property details, rooms and reviews
+- Booking / visit requests
+- Rent and payment history
+- Profile management
+- Future AI recommendations and image search
 
-### General
-- 🌙 **Dark / Light Mode** toggle
-- 🔐 **Auth** — Student & Owner login/signup with role-based protected routes
-- 📱 **Fully Responsive** — Works on mobile, tablet, and desktop
+### Owners
+- Multi-property management
+- Room management
+- Booking workflow
+- Tenant management foundation
+- Property verification workflow
+- Revenue/payment foundation
 
-## Tech Stack
+### Admin
+- User/property oversight
+- Property approval, rejection and suspension
+- Platform dashboard
+- Moderation foundation
 
-- **Frontend**: React 18 + TypeScript + Vite
-- **Styling**: Tailwind CSS + shadcn/ui
-- **Animations**: Framer Motion
-- **Routing**: React Router v6
-- **State**: React hooks + localStorage during migration
-- **Maps**: Google Maps API (`@react-google-maps/api`)
-- **Icons**: Lucide React
-- **Forms**: React Hook Form + Zod
-- **Backend**: Node.js + Express + TypeScript
-- **Validation**: Zod
-- **Security middleware**: Helmet + CORS
+## Stack
 
-## Getting Started
+- Frontend: React 18 + TypeScript + Vite
+- UI: Tailwind CSS + shadcn/ui
+- Backend: Node.js + Express + TypeScript
+- Database: PostgreSQL
+- Auth: bcrypt + JWT
+- Validation: Zod
+- Maps: Google Maps API
+- Testing/CI: Vitest, Playwright and GitHub Actions
+
+## Run locally
 
 ### Frontend
-
-Requirements: Node.js 18+ or Bun.
 
 ```bash
 npm install
@@ -73,80 +63,51 @@ npm run dev
 ```
 
 ### Backend
-
-Requirements: Node.js 20+.
 
 ```bash
 cd backend
 npm install
 cp .env.example .env
+# Create PostgreSQL database and apply backend/src/db/schema.sql
+npm run typecheck
+npm run build
 npm run dev
 ```
 
-Health check:
+Backend health endpoint:
 
-```text
-GET http://localhost:3000/api/v1/health
-```
+`GET http://localhost:3000/api/v1/health`
 
-The frontend should use the backend base URL through `VITE_API_URL` once API migration begins.
+## Environment
 
-## Environment Variables
+Frontend: `VITE_API_URL`, `VITE_GOOGLE_MAPS_API_KEY` and optional AI service configuration.
 
-### Frontend
+Backend: see `backend/.env.example`. Never commit secrets.
 
-| Variable | Required | Description |
-|---|---|---|
-| `VITE_GOOGLE_MAPS_API_KEY` | Yes for maps | Google Maps JavaScript API key |
-| `VITE_API_URL` | No | Backend API URL |
-| `VITE_AI_SERVICE_URL` | No | AI service URL when AI integration is enabled |
-
-### Backend
-
-See [`backend/.env.example`](backend/.env.example). Secrets must not be committed to Git.
-
-## Production architecture
+## Architecture
 
 ```text
 React + TypeScript
-        |
-        | REST / HTTPS
-        v
-Node.js + Express API
-        |
-        +-- Authentication & authorization
-        +-- Request validation
-        +-- Business services
-        +-- Database repositories
-        +-- Payments / webhooks
-        +-- AI integrations
-        |
-        v
-     Database
+       |
+       | REST / HTTPS
+       v
+Node.js + Express
+       |
+       +-- JWT authentication / authorization
+       +-- Zod validation
+       +-- Property / room / booking services
+       +-- Reviews / moderation
+       +-- Payment records + webhook boundary
+       +-- AI integration boundary
+       |
+       v
+   PostgreSQL
 ```
 
-## Project Structure
+## Branch
 
-```text
-src/                         # Existing React frontend
-├── components/
-├── data/
-├── hooks/
-├── lib/
-└── pages/
+Production migration work is isolated in:
 
-backend/                     # Production API (migration in progress)
-├── src/
-│   ├── config/
-│   │   └── env.ts
-│   ├── app.ts
-│   └── server.ts
-├── .env.example
-├── package.json
-├── tsconfig.json
-└── README.md
-```
+`feature/production-mvp-foundation`
 
-## Demo mode
-
-The existing frontend demo mode remains available while migration is in progress. It will be retired feature-by-feature only after the corresponding backend functionality has been implemented and tested.
+The `main` branch has not been changed by this migration work.
