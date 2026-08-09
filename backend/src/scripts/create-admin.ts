@@ -14,6 +14,10 @@ if (password.length < 12) {
   console.error('ADMIN_PASSWORD must be at least 12 characters.');
   process.exit(1);
 }
+if (!pool) {
+  console.error('DATABASE_URL is not configured.');
+  process.exit(1);
+}
 
 try {
   const passwordHash = await hashPassword(password);
