@@ -1,45 +1,32 @@
 # Student Hostel Platform API
 
-This directory contains the production backend for Residential Nexus.
+Production-oriented REST API for Residential Nexus / Student Hostel Platform.
 
-## Current phase
+## Run locally
 
-Phase 1 establishes a secure Express API shell. It intentionally does not contain authentication, database access, payments, or AI integrations yet. Those are added incrementally so each layer can be tested before the next one is introduced.
+1. Create PostgreSQL database `student_hostel`.
+2. Copy `.env.example` to `.env` and set `DATABASE_URL` and a strong `JWT_SECRET`.
+3. Apply `src/db/schema.sql` to PostgreSQL.
+4. From `backend/`, run `npm install`.
+5. Run `npm run typecheck`.
+6. Run `npm run dev`.
 
-## Requirements
+Health: `GET http://localhost:3000/api/v1/health`
 
-- Node.js 20+
-- npm
+## Implemented API
 
-## Setup
+- Authentication: register/login
+- Authenticated profile read/update
+- Property search, creation and update
+- Room creation/listing
+- Student booking creation/listing
+- Owner/admin booking workflow
+- Verified-stay reviews
+- Persistent payment records with an explicit gateway-verification boundary
+- Admin dashboard and property moderation
 
-```bash
-cd backend
-npm install
-cp .env.example .env
-npm run dev
-```
+## Not falsely marked as production-ready
 
-Health check:
+Real payment gateway settlement/webhooks, OTP/email delivery, Google OAuth, AI vision/image search and external identity verification require provider accounts, credentials and production webhook configuration. The code leaves explicit integration boundaries for those services rather than simulating successful verification.
 
-```text
-GET http://localhost:3000/api/v1/health
-```
-
-## Architecture direction
-
-```text
-React frontend
-      |
-      | HTTPS / REST
-      v
-Express API
-      |
-      +-- authentication & authorization
-      +-- validation
-      +-- business services
-      +-- database repositories
-      +-- external integrations
-```
-
-No secrets should be committed to Git. Use `.env` locally and configure secrets through the hosting provider in production.
+No secrets should be committed to Git. Use `.env` locally and hosting-provider secret storage in production.
