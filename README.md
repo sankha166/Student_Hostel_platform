@@ -1,121 +1,83 @@
 # Residential Nexus — Smart Room Search
 
-AI-powered student hostel & PG finder platform with a full owner management dashboard and home food delivery.
+Production-oriented student hostel / PG marketplace with student discovery, owner property management, bookings, rent tracking, food delivery, maps and responsive dashboards.
 
-## Features
+## Architecture
 
-### For Students
-- 🔍 **Smart Search** — Search hostels by text (name, location, amenities, tags) and price range
-- 🖼️ **Image-Based Discovery** — Upload a room photo to find similar hostels
-- 📋 **Hostel Detail** — View facilities, house rules, reviews, and AI-generated recommendations
-- 📅 **Book / Schedule Visit** — Send booking requests or schedule property visits directly
-- 💳 **Rent Tracking** — View monthly rent history, pay via UPI, download receipts
-- 🍽️ **Home Food Delivery** — Order home-cooked meals from local cooks delivered to your room
-- 👤 **Full Profile** — Personal info, education, guardian contacts, medical details, identity docs
+- **Frontend:** React 18 + TypeScript + Vite + Tailwind + shadcn/ui
+- **Production API:** Node.js + Express
+- **Database:** PostgreSQL
+- **Authentication:** bcrypt password hashing + JWT access tokens
+- **Maps:** Google Maps API
+- **Deployment:** frontend can run on Netlify/Vercel; backend can run on Railway/Render/Fly.io or any Node host; PostgreSQL can run on Railway, Supabase, Neon, Render or another managed PostgreSQL provider.
 
-### For Property Owners
-- 🏠 **Multi-Property Dashboard** — Overview of all properties with occupancy & revenue stats
-- 📊 **Per-Property Management**
-  - Dashboard with real-time stats
-  - Rooms management (add, view, status tracking)
-  - Tenant management with payment history & receipt download
-  - Booking & visit requests with room allocation workflow (3-step multi-form)
-  - Payment accounts (UPI + bank) management
-  - Bills & charges (electricity, water, maintenance, etc.)
-  - Edit property details
-- ➕ **Add New Property** — Full form with Google Maps pin drop, amenity selection, image upload
-- 👤 **Owner Profile** — Personal, business, identity document management
+## Current production foundation
 
-### General
-- 🌙 **Dark / Light Mode** toggle
-- 🔐 **Auth** — Student & Owner login/signup with role-based protected routes
-- 📱 **Fully Responsive** — Works on mobile, tablet, and desktop
+The `work-sankha` branch introduces a real backend boundary instead of treating localStorage as a server. The backend includes:
 
-## Tech Stack
+- secure password hashing
+- JWT authentication and `/api/auth/me`
+- PostgreSQL schema with users, student profiles, properties, rooms, bookings and payments
+- public hostel/property discovery APIs
+- owner property creation and listing APIs
+- authenticated student booking creation
+- authenticated owner/student booking status workflow
+- health endpoint for deployment checks
+- Helmet, CORS configuration and JSON limits
+- environment templates with no secrets committed
 
-- **Frontend**: React 18 + TypeScript + Vite
-- **Styling**: Tailwind CSS + shadcn/ui
-- **Animations**: Framer Motion
-- **Routing**: React Router v6
-- **State**: React hooks + localStorage (demo mode)
-- **Maps**: Google Maps API (`@react-google-maps/api`)
-- **Icons**: Lucide React
-- **Forms**: React Hook Form + Zod
+## Local development
 
-## Getting Started
-
-### Prerequisites
-- Node.js 18+ or Bun
-- Google Maps API key
-
-### Setup
+### Frontend
 
 ```bash
-# Install dependencies
 npm install
-
-# Copy env file
 cp .env.example .env
-
-# Fill in your Google Maps API key
-VITE_GOOGLE_MAPS_API_KEY=your_key_here
-
-# Start dev server
 npm run dev
 ```
 
-### Environment Variables
+Set `VITE_API_URL` to the backend URL.
 
-| Variable | Required | Description |
-|---|---|---|
-| `VITE_GOOGLE_MAPS_API_KEY` | Yes (for maps) | Google Maps JavaScript API key |
-| `VITE_API_URL` | No | Backend API URL (defaults to localhost:3000) |
-| `VITE_AI_SERVICE_URL` | No | AI service URL (defaults to localhost:5000) |
-
-## Build for Production
+### Backend
 
 ```bash
-npm run build
-# Output is in dist/
+cd backend
+npm install
+cp .env.example .env
 ```
 
-## Deploy to Netlify
+Create a PostgreSQL database and run `backend/sql/schema.sql`, then configure:
 
-1. Push to GitHub
-2. Connect repo in Netlify dashboard
-3. Set build command: `npm run build`
-4. Set publish directory: `dist`
-5. Add environment variables in Netlify settings
-6. Deploy!
+- `DATABASE_URL`
+- `JWT_SECRET` — use a long random secret in production
+- `CORS_ORIGIN` — the exact frontend origin(s)
+- `PORT` — supplied by the hosting provider when available
 
-The `netlify.toml` is already configured for SPA routing.
+Start the API:
 
-## Demo Mode
-
-The app ships with full mock data and works completely offline without a backend. Authentication stores session in `localStorage`. All CRUD operations update local state (no persistence between refreshes for demo).
-
-## Project Structure
-
-```
-src/
-├── components/       # Shared UI components
-│   ├── landing/      # Landing page sections
-│   └── ui/           # shadcn/ui primitives
-├── data/             # Mock data (hostels, owners, food, bills)
-├── hooks/            # useAuth, useMobile, useToast
-├── lib/              # api.ts, constants.ts, utils.ts
-└── pages/            # Route-level page components
-    ├── Index.tsx           # Landing page
-    ├── AuthPage.tsx        # Login/Signup
-    ├── StudentDashboard.tsx
-    ├── HostelDetail.tsx
-    ├── RentPage.tsx
-    ├── StudentProfile.tsx
-    ├── OwnerMainDashboard.tsx
-    ├── propertyDashboard.tsx
-    ├── AddProperty.tsx
-    ├── OwnerProfile.tsx
-    └── FoodDelivery.tsx
+```bash
+npm start
 ```
 
+Health check: `GET /health`
 
+## Important production rule
+
+The repository still contains legacy demo/localStorage modules used by parts of the existing UI. They are retained while the UI is migrated to the production API so existing screens do not break unexpectedly. **Do not treat localStorage accounts, mock listings, demo payment verification or demo Google login as production functionality.** The production release should use the backend for every authenticated and business-critical operation.
+
+## Release checklist
+
+1. Create the PostgreSQL database and apply `backend/sql/schema.sql`.
+2. Deploy the backend and verify `/health` reports `database: "ok"`.
+3. Configure frontend `VITE_API_URL` to the deployed API.
+4. Migrate remaining local data services (hostels, rooms, tenants, rent, food, profiles and payments) to API endpoints.
+5. Add real payment-provider server verification before enabling rent payments.
+6. Add object storage for identity/property images; never store sensitive documents as localStorage data.
+7. Configure Google OAuth with a real client ID and server-side token validation if Google login is enabled.
+8. Add rate limiting, request validation, audit logging, backups and monitoring before public launch.
+9. Run browser/mobile regression tests against a staging database.
+10. Only then merge `work-sankha` into `main` and release.
+
+## Branch
+
+All production work for this pass is isolated in **`work-sankha`**. `main` is untouched.
