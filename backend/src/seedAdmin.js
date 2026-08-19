@@ -1,0 +1,14 @@
+import 'dotenv/config';
+import pg from 'pg';
+import bcrypt from 'bcryptjs';
+const { Pool } = pg;
+const email = process.env.ADMIN_EMAIL;
+const password = process.env.ADMIN_PASSWORD;
+const name = process.env.ADMIN_NAME || 'Platform Administrator';
+if (!process.env.DATABASE_URL || !email || !password) throw new Error('DATABASE_URL, ADMIN_EMAIL and ADMIN_PASSWORD are required');
+if (password.length < 12) throw new Error('ADMIN_PASSWORD must be at least 12 characters');
+const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false });
+const hash = await bcrypt.hash(password, 12);
+await pool.query(`INSERT INTO admin_users(email,password_hash,name) VALUES($1,$2,$3) ON CONFLICT(email) DO UPDATE SET password_hash=EXCLUDED.password_hash,name=EXCLUDED.name,is_active=true`, [email.toLowerCase().trim(), hash, name]);
+console.log(`Admin account ready: ${email.toLowerCase().trim()}`);
+await pool.end();
