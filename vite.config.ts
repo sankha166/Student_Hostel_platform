@@ -2,12 +2,17 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 
-export default defineConfig(({ mode }) => ({
+export default defineConfig(() => ({
   server: {
-    host: "::",
-    port: 5173,
+    host: "localhost",
+    port: 8081,
     strictPort: true,
-    hmr: { overlay: false },
+    hmr: true,
+  },
+  preview: {
+    host: "localhost",
+    port: 8081,
+    strictPort: true,
   },
   plugins: [react()],
   resolve: {
