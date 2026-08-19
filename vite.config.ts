@@ -8,6 +8,16 @@ export default defineConfig(() => ({
     port: 8081,
     strictPort: true,
     hmr: true,
+    proxy: {
+      "/api": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+      "/health": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+    },
   },
   preview: {
     host: "localhost",
