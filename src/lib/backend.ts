@@ -1,7 +1,7 @@
-/** Frontend API client. VITE_API_URL overrides the local development backend. */
+/** Frontend API client. VITE_API_URL overrides the API origin. In local Vite, /api is proxied to the backend. */
 
 const configuredBase = import.meta.env.VITE_API_URL as string | undefined;
-export const API_BASE_URL = (configuredBase || 'http://localhost:8080').replace(/\/$/, '');
+export const API_BASE_URL = (configuredBase ?? '').replace(/\/$/, '');
 
 export class BackendError extends Error {
   status: number;
@@ -20,7 +20,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     return payload as T;
   } catch (error) {
     if (error instanceof BackendError) throw error;
-    throw new BackendError(0, `Cannot reach backend at ${API_BASE_URL}. Start the backend server on port 8080.`);
+    throw new BackendError(0, 'Cannot reach the backend. Make sure the backend is running on port 8080.');
   }
 }
 
