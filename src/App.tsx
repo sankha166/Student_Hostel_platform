@@ -16,67 +16,20 @@ import AddProperty from "./pages/AddProperty.tsx";
 import OwnerProfile from "./pages/OwnerProfile.tsx";
 import StudentProfile from "./pages/StudentProfile.tsx";
 import FoodDelivery from "./pages/FoodDelivery.tsx";
+import AdminLogin from "./pages/AdminLogin.tsx";
+import AdminDashboard from "./pages/AdminDashboard.tsx";
 import { ProtectedRoute } from "./components/ProtectedRoute.tsx";
-
 const queryClient = new QueryClient();
-
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/auth" element={<AuthPage />} />
-            <Route path="/food" element={<FoodDelivery />} />
-            <Route path="/student" element={
-              <ProtectedRoute requiredRole="student">
-                <StudentDashboard />
-              </ProtectedRoute>
-            } />
-            <Route path="/student/hostel/:id" element={
-              <ProtectedRoute requiredRole="student">
-                <HostelDetail />
-              </ProtectedRoute>
-            } />
-            <Route path="/student/rent" element={
-              <ProtectedRoute requiredRole="student">
-                <RentPage />
-              </ProtectedRoute>
-            } />
-            <Route path="/student/profile" element={
-              <ProtectedRoute requiredRole="student">
-                <StudentProfile />
-              </ProtectedRoute>
-            } />
-            <Route path="/owner" element={
-              <ProtectedRoute requiredRole="owner">
-                <OwnerMainDashboard />
-              </ProtectedRoute>
-            } />
-            <Route path="/owner/property/:propertyId" element={
-              <ProtectedRoute requiredRole="owner">
-                <PropertyDashboard />
-              </ProtectedRoute>
-            } />
-            <Route path="/owner/add-property" element={
-              <ProtectedRoute requiredRole="owner">
-                <AddProperty />
-              </ProtectedRoute>
-            } />
-            <Route path="/owner/profile" element={
-              <ProtectedRoute requiredRole="owner">
-                <OwnerProfile />
-              </ProtectedRoute>
-            } />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </AuthProvider>
-  </QueryClientProvider>
-);
-
+const App = () => (<QueryClientProvider client={queryClient}><AuthProvider><TooltipProvider><Toaster /><Sonner /><BrowserRouter><Routes>
+<Route path="/" element={<Index />} /><Route path="/auth" element={<AuthPage />} /><Route path="/food" element={<FoodDelivery />} />
+<Route path="/admin/login" element={<AdminLogin />} /><Route path="/admin" element={<AdminDashboard />} />
+<Route path="/student" element={<ProtectedRoute requiredRole="student"><StudentDashboard /></ProtectedRoute>} />
+<Route path="/student/hostel/:id" element={<ProtectedRoute requiredRole="student"><HostelDetail /></ProtectedRoute>} />
+<Route path="/student/rent" element={<ProtectedRoute requiredRole="student"><RentPage /></ProtectedRoute>} />
+<Route path="/student/profile" element={<ProtectedRoute requiredRole="student"><StudentProfile /></ProtectedRoute>} />
+<Route path="/owner" element={<ProtectedRoute requiredRole="owner"><OwnerMainDashboard /></ProtectedRoute>} />
+<Route path="/owner/property/:propertyId" element={<ProtectedRoute requiredRole="owner"><PropertyDashboard /></ProtectedRoute>} />
+<Route path="/owner/add-property" element={<ProtectedRoute requiredRole="owner"><AddProperty /></ProtectedRoute>} />
+<Route path="/owner/profile" element={<ProtectedRoute requiredRole="owner"><OwnerProfile /></ProtectedRoute>} />
+<Route path="*" element={<NotFound />} /></Routes></BrowserRouter></TooltipProvider></AuthProvider></QueryClientProvider>);
 export default App;
