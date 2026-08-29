@@ -1,0 +1,17 @@
+{
+  "previewPort": 3000,
+  "healthPath": "/",
+  "startCommand": "docker compose -f docker-compose.base44.yml up -d",
+  "secrets": [
+    {
+      "name": "VITE_GOOGLE_MAPS_API_KEY",
+      "description": "Google Maps JavaScript API key — used for the map picker on the Add Property page. Optional: the app boots and works in demo mode without it. Get it from https://console.cloud.google.com/ (Maps JavaScript API).",
+      "requiredAtBoot": false
+    },
+    {
+      "name": "VITE_GOOGLE_CLIENT_ID",
+      "description": "Google OAuth 2.0 Web client ID — enables 'Sign in with Google' on the auth page. Optional: falls back to demo Google login without it. Get it from https://console.cloud.google.com/ (OAuth 2.0 Client ID, Web application).",
+      "requiredAtBoot": false
+    }
+  ]
+}
