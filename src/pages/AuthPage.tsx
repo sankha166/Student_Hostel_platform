@@ -9,7 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
-import { GOOGLE_CLIENT_ID } from "@/lib/googleAuth";
+import { authService } from "@/lib/dataService";
+import { renderGoogleButton, GOOGLE_CLIENT_ID, type GoogleUser } from "@/lib/googleAuth";
+import { addItem, getCollection } from "@/lib/storageService";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -51,16 +53,12 @@ const AuthPage = () => {
   // Render real Google button when role changes or component mounts
   useEffect(() => {
     if (!GOOGLE_CLIENT_ID) return;
-    // Google Identity Services button is rendered only when a client ID is configured.
-    // The import is dynamic so we don't break when the script hasn't loaded.
-    import("@/lib/googleAuth").then(({ renderGoogleButton }) => {
-      const containerId = `google-btn-${role}`;
-      renderGoogleButton(
-        containerId,
-        (googleUser: any) => handleGoogleSuccess(googleUser),
-        (err: Error) => setGoogleError(err.message)
-      );
-    });
+    const containerId = `google-btn-${role}`;
+    renderGoogleButton(
+      containerId,
+      (googleUser: GoogleUser) => handleGoogleSuccess(googleUser),
+      (err: Error) => setGoogleError(err.message)
+    );
   }, [role, isLogin]);
 
   const resetForm = () => {
@@ -107,13 +105,15 @@ const AuthPage = () => {
     setLoading(true);
     try {
       if (isLogin) {
-        await login(email.trim(), password);
+        const result = await authService.login(email, password);
+        login({ ...result.user }, result.token);
         setSuccessMsg("Login successful! Redirecting...");
       } else {
-        await register({
+        const result = await authService.signup({
           email: email.trim(), password, name: fullName.trim(),
-          role, phone: phone.trim(),
+          role, phone: phone.trim(), address: address.trim(),
         });
+        login({ ...result.user }, result.token);
         setSuccessMsg("Account created! Redirecting...");
       }
     } catch (err) {
@@ -123,22 +123,34 @@ const AuthPage = () => {
     }
   };
 
-  const handleGoogleSuccess = async (googleUser: any) => {
+  const handleGoogleSuccess = async (googleUser: GoogleUser) => {
     setGoogleLoading(true);
     setGoogleError("");
     try {
-      // Try logging in with the Google email using a backend flow.
-      // Since Google OAuth needs a backend token exchange, we attempt a login
-      // with a known demo password fallback for accounts created via Google.
-      try {
-        await login(googleUser.email, `google_${googleUser.sub}`);
-      } catch {
-        await register({
+      // Check if this Google user already has an account
+      const users = authService.getUsers();
+      const existing = users.find(u => u.email.toLowerCase() === googleUser.email.toLowerCase());
+
+      if (existing) {
+        // Log them in
+        const token = `gtok_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const { passwordHash: _, ...safeUser } = existing;
+        login(safeUser, token);
+      } else {
+        // Create new account — need to ask for role
+        // We use the current role tab selection
+        const result = await authService.signup({
           email: googleUser.email,
-          password: `google_${googleUser.sub}`,
+          password: `google_${googleUser.sub}`, // Google users won't need this password
           name: googleUser.name,
           role,
+          phone: "",
+          address: "",
         });
+        login({
+          ...result.user,
+          avatar: googleUser.picture,
+        }, result.token);
       }
     } catch (err) {
       setGoogleError(err instanceof Error ? err.message : "Google sign-in failed");
@@ -150,10 +162,25 @@ const AuthPage = () => {
   // Fallback demo Google login (when VITE_GOOGLE_CLIENT_ID not set)
   const handleDemoGoogleLogin = async () => {
     setGoogleLoading(true);
-    await new Promise(r => setTimeout(r, 400));
+    await new Promise(r => setTimeout(r, 500));
     try {
-      const demoEmail = role === "student" ? "student@nexus.demo" : "owner@nexus.demo";
-      await login(demoEmail, "demo123456");
+      // Create or find demo user
+      const demoEmail = `demo.${role}@gmail.com`;
+      const demoName = role === "student" ? "Demo Student" : "Demo Owner";
+      const users = authService.getUsers();
+      let result;
+      const existing = users.find(u => u.email === demoEmail);
+      if (existing) {
+        const token = `gtok_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const { passwordHash: _, ...safeUser } = existing;
+        result = { user: safeUser, token };
+      } else {
+        result = await authService.signup({
+          email: demoEmail, password: "demo123456", name: demoName,
+          role, phone: "+91 98765 43210", address: "Demo Address, Bangalore",
+        });
+      }
+      login(result.user, result.token);
     } catch (err) {
       setGoogleError("Demo login failed. Please use email signup.");
     } finally {

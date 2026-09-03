@@ -16,7 +16,6 @@ import AddProperty from "./pages/AddProperty.tsx";
 import OwnerProfile from "./pages/OwnerProfile.tsx";
 import StudentProfile from "./pages/StudentProfile.tsx";
 import FoodDelivery from "./pages/FoodDelivery.tsx";
-import ResidentComplaints from "./pages/ResidentComplaints.tsx";
 import { ProtectedRoute } from "./components/ProtectedRoute.tsx";
 
 const queryClient = new QueryClient();
@@ -50,11 +49,6 @@ const App = () => (
             <Route path="/student/profile" element={
               <ProtectedRoute requiredRole="student">
                 <StudentProfile />
-              </ProtectedRoute>
-            } />
-            <Route path="/student/complaints" element={
-              <ProtectedRoute requiredRole="student">
-                <ResidentComplaints />
               </ProtectedRoute>
             } />
             <Route path="/owner" element={

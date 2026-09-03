@@ -1,185 +1,449 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, Building2, MapPin, CheckCircle2 } from "lucide-react";
+import {
+  ArrowLeft, Building2, MapPin, Upload, Phone, Mail, IndianRupee,
+  Plus, X, CheckCircle2, Image, Home
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { propertyApi, inventoryApi } from "@/lib/nexus";
-import { AMENITY_OPTIONS } from "@/lib/constants";
-import { useToast } from "@/hooks/use-toast";
+import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
+import { propertyService } from "@/lib/dataService";
 
-export default function AddProperty() {
+const libraries: ("places" | "drawing" | "geometry" | "visualization")[] = ['places'];
+
+const AMENITY_OPTIONS = [
+  "Wi-Fi", "AC", "Laundry", "Study Room", "Gym", "Power Backup",
+  "Parking", "Kitchen Access", "Meals", "Hot Water", "CCTV",
+  "Gaming Room", "Rooftop", "Library", "Co-working Space", "Swimming Pool"
+];
+
+const AddProperty = () => {
   const navigate = useNavigate();
-  const { toast } = useToast();
-  const [step, setStep] = useState(1);
-  const [loading, setLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [form, setForm] = useState({
-    name: "", type: "hostel", address: "", city: "", state: "Karnataka", pincode: "",
-    contactPhone: "", contactEmail: "", imageUrl: "", amenities: [] as string[],
+    name: "",
+    maleOrFemaleOrQuadruple: "male" as "male" | "female" | "quadruple",
+    type: "hostel" as "hostel" | "pg" | "apartment",
+    address: "",
+    city: "",
+    state: "",
+    pincode: "",
+    description: "",
+    totalRooms: "",
+    monthlyRentFrom: "",
+    monthlyRentTo: "",
+    contactPhone: "",
+    contactEmail: "",
+    amenities: [] as string[],
   });
-  // Inventory setup
-  const [buildingName, setBuildingName] = useState("Main Building");
-  const [floorCount, setFloorCount] = useState(2);
-  const [roomsPerFloor, setRoomsPerFloor] = useState(3);
-  const [bedsPerRoom, setBedsPerRoom] = useState(2);
-  const [baseRent, setBaseRent] = useState(4500);
+    // --- MAP STATES ---
+  const [markerPosition, setMarkerPosition] = useState({ lat: 12.9716, lng: 77.5946 });
+  const [address, setAddress] = useState("");
 
-  const toggleAmenity = (a: string) => {
-    setForm(p => ({ ...p, amenities: p.amenities.includes(a) ? p.amenities.filter(x => x !== a) : [...p.amenities, a] }));
-  };
+  const { isLoaded } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "",
+    libraries
+  });
 
-  const handleSubmit = async () => {
-    setLoading(true);
-    try {
-      // 1. Create property
-      const property = await propertyApi.create({
-        name: form.name, type: form.type, address: form.address, city: form.city,
-        state: form.state, pincode: form.pincode, contactPhone: form.contactPhone,
-        contactEmail: form.contactEmail, imageUrl: form.imageUrl || undefined,
-        amenities: form.amenities,
-      });
-
-      // 2. Create building + floors + rooms + beds
-      const building = await inventoryApi.addBuilding(property.id, { name: buildingName, floorsCount: floorCount });
-      for (let f = 1; f <= floorCount; f++) {
-        const floor = await inventoryApi.addFloor(building.id, { floorNumber: f, name: `Floor ${f}` });
-        for (let r = 1; r <= roomsPerFloor; r++) {
-          const roomNum = `${f}${String(r).padStart(2, "0")}`;
-          const room = await inventoryApi.addRoom(floor.id, {
-            roomNumber: roomNum, roomType: bedsPerRoom === 1 ? "single" : bedsPerRoom === 2 ? "double" : "triple",
-            rentAmount: baseRent + (f - 1) * 500, depositAmount: (baseRent + (f - 1) * 500) * 2,
-            amenities: ["Wi-Fi"],
-          });
-          for (let b = 0; b < bedsPerRoom; b++) {
-            await inventoryApi.addBed(room.id, { bedNumber: `${roomNum}-${String.fromCharCode(65 + b)}`, bedType: "standard" });
-          }
-        }
-      }
-
-      toast({ title: "Property created!", description: `${form.name} with ${floorCount * roomsPerFloor * bedsPerRoom} beds` });
-      navigate(`/owner/property/${property.id}`);
-    } catch (err) {
-      toast({ title: "Failed to create property", description: err instanceof Error ? err.message : undefined, variant: "destructive" });
-    } finally {
-      setLoading(false);
+  // --- MAP HANDLERS ---
+  const onMapClick = (e: google.maps.MapMouseEvent) => {
+    if (e.latLng) {
+      setMarkerPosition({ lat: e.latLng.lat(), lng: e.latLng.lng() });
     }
   };
 
+  const onMarkerDragEnd = (e: google.maps.MapMouseEvent) => {
+    if (e.latLng) {
+      setMarkerPosition({ lat: e.latLng.lat(), lng: e.latLng.lng() });
+    }
+  };
+
+  const [images, setImages] = useState<File[]>([]);
+  const [submitted, setSubmitted] = useState(false);
+
+  const toggleAmenity = (amenity: string) => {
+    setForm(prev => ({
+      ...prev,
+      amenities: prev.amenities.includes(amenity)
+        ? prev.amenities.filter(a => a !== amenity)
+        : [...prev.amenities, amenity]
+    }));
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setImages(prev => [...prev, ...Array.from(e.target.files!)].slice(0, 10));
+    }
+  };
+
+  const removeImage = (index: number) => {
+    setImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    // Persist property using dataService
+    propertyService.create({
+      name: form.name,
+      type: form.type,
+      location: `${form.city}, ${form.state}`,
+      address: `${form.address}, ${form.city}, ${form.state} - ${form.pincode}`,
+      totalRooms: parseInt(form.totalRooms) || 0,
+      occupiedRooms: 0,
+      totalBeds: parseInt(form.totalRooms) || 0,
+      occupiedBeds: 0,
+      monthlyRent: parseInt(form.monthlyRentFrom) || 0,
+      totalRevenue: 0,
+      dueAmount: 0,
+      image: "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?w=600&h=400&fit=crop",
+      rating: 0,
+      lat: markerPosition.lat,
+      lng: markerPosition.lng,
+      amenities: form.amenities,
+      contactPhone: form.contactPhone,
+      contactEmail: form.contactEmail,
+    });
+    setSubmitted(true);
+    setTimeout(() => navigate("/owner"), 2000);
+  };
+
+  if (submitted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="text-center">
+          <div className="w-20 h-20 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center mx-auto mb-4">
+            <CheckCircle2 className="w-10 h-10 text-emerald-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-foreground mb-2">Property Added!</h2>
+          <p className="text-muted-foreground">Redirecting to dashboard...</p>
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b bg-card px-4 md:px-8 py-4 flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/owner")} className="rounded-xl"><ArrowLeft className="w-5 h-5" /></Button>
-        <h1 className="text-xl font-bold text-foreground">Add New Property</h1>
-      </header>
-
-      <main className="max-w-2xl mx-auto p-4 md:p-8">
-        <div className="flex items-center justify-center mb-8">
-          {[1, 2, 3].map(s => (
-            <div key={s} className="flex items-center">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${step >= s ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>{s}</div>
-              {s < 3 && <div className={`w-16 h-0.5 ${step > s ? "bg-primary" : "bg-muted"}`} />}
-            </div>
-          ))}
+      {/* Header */}
+      <div className="border-b bg-card">
+        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => navigate("/owner")} className="rounded-xl">
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div>
+            <h1 className="text-xl font-bold text-foreground">Add New Property</h1>
+            <p className="text-sm text-muted-foreground">Fill in the details to list your property</p>
+          </div>
         </div>
+      </div>
 
-        {step === 1 && (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
-            <Card className="border-0 shadow-sm">
-              <CardHeader><CardTitle className="flex items-center gap-2"><Building2 className="w-5 h-5 text-primary" /> Property Details</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
-                <div><Label>Property Name *</Label><Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Sunrise Student Haven" className="rounded-xl" /></div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div><Label>Type</Label>
-                    <Select value={form.type} onValueChange={v => setForm(p => ({ ...p, type: v }))}>
-                      <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
-                      <SelectContent><SelectItem value="hostel">Hostel</SelectItem><SelectItem value="pg">PG</SelectItem><SelectItem value="coliving">Co-Living</SelectItem><SelectItem value="dormitory">Dormitory</SelectItem><SelectItem value="workforce">Workforce Housing</SelectItem></SelectContent>
-                    </Select>
-                  </div>
-                  <div><Label>Pincode</Label><Input value={form.pincode} onChange={e => setForm(p => ({ ...p, pincode: e.target.value }))} className="rounded-xl" /></div>
-                </div>
-                <div><Label>Full Address *</Label><Textarea value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} placeholder="Complete property address" className="rounded-xl" rows={2} /></div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div><Label>City *</Label><Input value={form.city} onChange={e => setForm(p => ({ ...p, city: e.target.value }))} className="rounded-xl" /></div>
-                  <div><Label>State *</Label><Input value={form.state} onChange={e => setForm(p => ({ ...p, state: e.target.value }))} className="rounded-xl" /></div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div><Label>Contact Phone</Label><Input value={form.contactPhone} onChange={e => setForm(p => ({ ...p, contactPhone: e.target.value }))} className="rounded-xl" /></div>
-                  <div><Label>Contact Email</Label><Input type="email" value={form.contactEmail} onChange={e => setForm(p => ({ ...p, contactEmail: e.target.value }))} className="rounded-xl" /></div>
-                </div>
-                <div><Label>Amenities</Label>
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {AMENITY_OPTIONS.map(a => (
-                      <button key={a} type="button" onClick={() => toggleAmenity(a)} className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${form.amenities.includes(a) ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-transparent"}`}>{a}</button>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex justify-end pt-2"><Button disabled={!form.name || !form.address || !form.city} onClick={() => setStep(2)} className="rounded-xl">Next: Inventory Setup →</Button></div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Basic Info */}
+          <Card className="border-0 shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-primary" /> Basic Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2 space-y-2">
+                <label className="text-sm font-medium text-foreground">Property Name *</label>
+                <Input
+                  placeholder="e.g. Sunrise Student Haven"
+                  value={form.name}
+                  onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                  required
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Property Type *</label>
+                <select
+                  value={form.type}
+                  onChange={e => setForm(p => ({ ...p, type: e.target.value as typeof form.type }))}
+                  className="w-full h-10 rounded-xl border border-input bg-background px-3 text-sm"
+                >
+                  <option value="hostel">Hostel</option>
+                  <option value="pg">PG (Paying Guest)</option>
+                  <option value="apartment">Apartment</option>
+                </select>
+                <label className="text-sm font-medium text-foreground">Accomodation For *</label>
+                <select
+                  value={form.maleOrFemaleOrQuadruple}
+                  onChange={e => setForm(p => ({ ...p, maleOrFemaleOrQuadruple: e.target.value as typeof form.maleOrFemaleOrQuadruple }))}
+                  className="w-full h-10 rounded-xl border border-input bg-background px-3 text-sm"
+                >
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="quadruple">Quadruple</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Total Rooms *</label>
+                <Input
+                  type="number"
+                  min={1}
+                  placeholder="e.g. 20"
+                  value={form.totalRooms}
+                  onChange={e => setForm(p => ({ ...p, totalRooms: e.target.value }))}
+                  required
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Rent Range From (₹) *</label>
+                <Input
+                  type="number"
+                  min={0}
+                  placeholder="e.g. 3000"
+                  value={form.monthlyRentFrom}
+                  onChange={e => setForm(p => ({ ...p, monthlyRentFrom: e.target.value }))}
+                  required
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Rent Range To (₹) *</label>
+                <Input
+                  type="number"
+                  min={0}
+                  placeholder="e.g. 7000"
+                  value={form.monthlyRentTo}
+                  onChange={e => setForm(p => ({ ...p, monthlyRentTo: e.target.value }))}
+                  required
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="md:col-span-2 space-y-2">
+                <label className="text-sm font-medium text-foreground">Description</label>
+                <Textarea
+                  placeholder="Describe your property - features, nearby landmarks, what makes it special..."
+                  value={form.description}
+                  onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+                  rows={3}
+                  className="rounded-xl"
+                />
+              </div>
+            </CardContent>
+          </Card>
 
-        {step === 2 && (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
-            <Card className="border-0 shadow-sm">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2"><MapPin className="w-5 h-5 text-primary" /> Inventory Setup</CardTitle>
-                <CardDescription>Quickly set up buildings, floors, rooms and beds. You can fine-tune later.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div><Label>Building Name</Label><Input value={buildingName} onChange={e => setBuildingName(e.target.value)} className="rounded-xl" /></div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div><Label>Number of Floors</Label><Input type="number" min={1} value={floorCount} onChange={e => setFloorCount(Number(e.target.value))} className="rounded-xl" /></div>
-                  <div><Label>Rooms per Floor</Label><Input type="number" min={1} value={roomsPerFloor} onChange={e => setRoomsPerFloor(Number(e.target.value))} className="rounded-xl" /></div>
-                  <div><Label>Beds per Room</Label><Input type="number" min={1} max={4} value={bedsPerRoom} onChange={e => setBedsPerRoom(Number(e.target.value))} className="rounded-xl" /></div>
-                  <div><Label>Base Rent (₹/month)</Label><Input type="number" min={0} value={baseRent} onChange={e => setBaseRent(Number(e.target.value))} className="rounded-xl" /></div>
-                </div>
-                <div className="bg-primary/5 rounded-xl p-4 flex items-center gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
-                  <div className="text-sm">
-                    <p className="font-medium">This will create {floorCount * roomsPerFloor * bedsPerRoom} beds</p>
-                    <p className="text-muted-foreground">{floorCount} floors × {roomsPerFloor} rooms × {bedsPerRoom} beds in "{buildingName}"</p>
-                  </div>
-                </div>
-                <div className="flex justify-between pt-2">
-                  <Button variant="outline" onClick={() => setStep(1)} className="rounded-xl">← Back</Button>
-                  <Button onClick={() => setStep(3)} className="rounded-xl">Review →</Button>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
+          {/* Location */}
+          <Card className="border-0 shadow-sm">
+            <CardHeader>
+            <div>
+                              <label className="text-sm font-medium text-foreground mb-1 block">Location</label>
+                              <div className="relative mb-3">
+                                <Input 
+                                  placeholder="Search or drag pin on map" 
+                                  className="rounded-xl pl-10" 
+                                  value={address}
+                                  onChange={(e) => setAddress(e.target.value)}
+                                />
+                                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                              </div>
+                              
+                              {/* Google Map Implementation */}
+                              <div className="rounded-xl overflow-hidden border border-border h-[300px] relative">
+                                {isLoaded ? (
+                                  <GoogleMap
+                                    mapContainerStyle={{ width: '100%', height: '100%' }}
+                                    center={markerPosition}
+                                    zoom={15}
+                                    onClick={onMapClick}
+                                    options={{
+                                      disableDefaultUI: true,
+                                      zoomControl: true,
+                                    }}
+                                  >
+                                    <Marker 
+                                      position={markerPosition} 
+                                      draggable={true}
+                                      onDragEnd={(e) => {
+                                        if(e.latLng) setMarkerPosition({ lat: e.latLng.lat(), lng: e.latLng.lng() });
+                                      }}
+                                    />
+                                  </GoogleMap>
+                                ) : (
+                                  <div className="w-full h-full bg-secondary animate-pulse flex items-center justify-center text-muted-foreground">
+                                    Loading Map...
+                                  </div>
+                                )}
+                                <div className="absolute bottom-3 left-3 bg-card/90 backdrop-blur px-3 py-1.5 rounded-lg border border-border text-[10px] text-muted-foreground">
+                                  Lat: {markerPosition.lat.toFixed(4)}, Lng: {markerPosition.lng.toFixed(4)}
+                                </div>
+                              </div>
+                            </div>
+            </CardHeader>
+            
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2 space-y-2">
+                <label className="text-sm font-medium text-foreground">Full Address *</label>
+                <Textarea
+                  placeholder="Street address, area, landmark..."
+                  value={form.address}
+                  onChange={e => setForm(p => ({ ...p, address: e.target.value }))}
+                  required
+                  rows={2}
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">City *</label>
+                <Input
+                  placeholder="e.g. Bangalore"
+                  value={form.city}
+                  onChange={e => setForm(p => ({ ...p, city: e.target.value }))}
+                  required
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">State *</label>
+                <Input
+                  placeholder="e.g. Karnataka"
+                  value={form.state}
+                  onChange={e => setForm(p => ({ ...p, state: e.target.value }))}
+                  required
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Pincode *</label>
+                <Input
+                  placeholder="e.g. 560034"
+                  value={form.pincode}
+                  onChange={e => setForm(p => ({ ...p, pincode: e.target.value }))}
+                  required
+                  maxLength={6}
+                  className="rounded-xl"
+                />
+              </div>
+            </CardContent>
+          </Card>
 
-        {step === 3 && (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
-            <Card className="border-0 shadow-sm">
-              <CardHeader><CardTitle>Review & Create</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm"><span className="text-muted-foreground">Name</span><span className="font-medium">{form.name}</span></div>
-                  <div className="flex justify-between text-sm"><span className="text-muted-foreground">Type</span><span className="font-medium capitalize">{form.type}</span></div>
-                  <div className="flex justify-between text-sm"><span className="text-muted-foreground">Address</span><span className="font-medium text-right">{form.address}, {form.city}, {form.state}</span></div>
-                  <div className="flex justify-between text-sm"><span className="text-muted-foreground">Building</span><span className="font-medium">{buildingName}</span></div>
-                  <div className="flex justify-between text-sm"><span className="text-muted-foreground">Total Beds</span><span className="font-medium">{floorCount * roomsPerFloor * bedsPerRoom}</span></div>
-                  <div className="flex justify-wrap gap-1 pt-2">{form.amenities.map(a => <Badge key={a} variant="secondary" className="text-xs">{a}</Badge>)}</div>
+          {/* Contact */}
+          <Card className="border-0 shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Phone className="w-5 h-5 text-primary" /> Contact Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Contact Phone *</label>
+                <Input
+                  type="tel"
+                  placeholder="+91 98765 43210"
+                  value={form.contactPhone}
+                  onChange={e => setForm(p => ({ ...p, contactPhone: e.target.value }))}
+                  required
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Contact Email *</label>
+                <Input
+                  type="email"
+                  placeholder="property@email.com"
+                  value={form.contactEmail}
+                  onChange={e => setForm(p => ({ ...p, contactEmail: e.target.value }))}
+                  required
+                  className="rounded-xl"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Amenities */}
+          <Card className="border-0 shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Home className="w-5 h-5 text-primary" /> Amenities
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {AMENITY_OPTIONS.map(amenity => (
+                  <Badge
+                    key={amenity}
+                    variant={form.amenities.includes(amenity) ? "default" : "outline"}
+                    className="cursor-pointer text-sm px-3 py-1.5 transition-all"
+                    onClick={() => toggleAmenity(amenity)}
+                  >
+                    {form.amenities.includes(amenity) && <CheckCircle2 className="w-3 h-3 mr-1" />}
+                    {amenity}
+                  </Badge>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Images */}
+          <Card className="border-0 shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Image className="w-5 h-5 text-primary" /> Property Images
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div
+                className="border-2 border-dashed border-muted-foreground/20 rounded-xl p-8 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+                <p className="text-foreground font-medium">Click to upload images</p>
+                <p className="text-sm text-muted-foreground mt-1">JPG, PNG (Max 5MB each, up to 10 images)</p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={handleImageUpload}
+                />
+              </div>
+              {images.length > 0 && (
+                <div className="flex gap-3 mt-4 flex-wrap">
+                  {images.map((img, i) => (
+                    <div key={i} className="relative group">
+                      <img
+                        src={URL.createObjectURL(img)}
+                        alt={`Upload ${i + 1}`}
+                        className="w-20 h-20 rounded-xl object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeImage(i)}
+                        className="absolute -top-2 -right-2 w-5 h-5 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex justify-between pt-4">
-                  <Button variant="outline" onClick={() => setStep(2)} className="rounded-xl">← Back</Button>
-                  <Button onClick={handleSubmit} disabled={loading} className="rounded-xl gap-2">
-                    {loading ? <><span className="w-4 h-4 border-2 border-current border-r-transparent rounded-full animate-spin" /> Creating...</> : <><CheckCircle2 className="w-4 h-4" /> Create Property</>}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
-      </main>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Submit */}
+          <div className="flex gap-3 justify-end">
+            <Button type="button" variant="outline" onClick={() => navigate("/owner")} className="rounded-xl">
+              Cancel
+            </Button>
+            <Button type="submit" className="rounded-xl gap-2 px-8">
+              <Plus className="w-4 h-4" /> Add Property
+            </Button>
+          </div>
+        </form>
+      </div>
     </div>
   );
-}
+};
+
+export default AddProperty;

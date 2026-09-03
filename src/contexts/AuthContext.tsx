@@ -1,84 +1,64 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { api, setToken } from "@/lib/apiClient";
+import { initializeData } from "@/lib/dataService";
 
 export interface User {
   id: string;
-  accountId: string;
   email: string;
-  name: string; // computed from firstName + lastName
-  firstName: string;
-  lastName?: string;
-  role: "student" | "owner"; // frontend maps "resident"→"student", "owner"→"owner"
+  name: string;
+  role: "student" | "owner";
+  avatar?: string;
   phone?: string;
+  address?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<User>;
-  register: (data: { email: string; password: string; name: string; role: "student" | "owner"; phone?: string }) => Promise<User>;
+  login: (user: User, token: string) => void;
   logout: () => void;
   updateUser: (updates: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+const AUTH_TOKEN_KEY = "auth_token";
 const USER_DATA_KEY = "userData";
-
-function mapBackendUser(u: any): User {
-  const role = u.role === "resident" ? "student" : "owner";
-  return {
-    id: u.id,
-    accountId: u.accountId,
-    email: u.email,
-    firstName: u.firstName,
-    lastName: u.lastName,
-    name: [u.firstName, u.lastName].filter(Boolean).join(" "),
-    role: role as "student" | "owner",
-    phone: u.phone,
-  };
-}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("auth_token");
-    const raw = localStorage.getItem(USER_DATA_KEY);
-    if (token && raw) {
-      try {
-        setUser(mapBackendUser(JSON.parse(raw)));
-      } catch {
-        localStorage.removeItem("auth_token");
-        localStorage.removeItem(USER_DATA_KEY);
+    // Initialize persistent data store (seeds mock data on first run)
+    initializeData();
+
+    try {
+      const token = localStorage.getItem(AUTH_TOKEN_KEY);
+      const raw = localStorage.getItem(USER_DATA_KEY);
+      if (token && raw) {
+        const parsed = JSON.parse(raw) as User;
+        // Ensure role is always present
+        if (parsed && parsed.email) {
+          setUser(parsed);
+        }
       }
+    } catch {
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(USER_DATA_KEY);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
-  const login = async (email: string, password: string): Promise<User> => {
-    const data = await api.post<{ token: string; user: any }>("/auth/login", { email, password });
-    setToken(data.token);
-    const mapped = mapBackendUser(data.user);
-    localStorage.setItem(USER_DATA_KEY, JSON.stringify(data.user));
-    setUser(mapped);
-    return mapped;
-  };
-
-  const register = async (reg: { email: string; password: string; name: string; role: "student" | "owner"; phone?: string }): Promise<User> => {
-    const backendRole = reg.role === "student" ? "resident" : "owner";
-    const data = await api.post<{ token: string; user: any }>("/auth/register", { ...reg, role: backendRole });
-    setToken(data.token);
-    const mapped = mapBackendUser(data.user);
-    localStorage.setItem(USER_DATA_KEY, JSON.stringify(data.user));
-    setUser(mapped);
-    return mapped;
+  const login = (newUser: User, token: string) => {
+    localStorage.setItem(AUTH_TOKEN_KEY, token);
+    localStorage.setItem(USER_DATA_KEY, JSON.stringify(newUser));
+    setUser(newUser);
   };
 
   const logout = () => {
-    setToken(null);
+    localStorage.removeItem(AUTH_TOKEN_KEY);
     localStorage.removeItem(USER_DATA_KEY);
     setUser(null);
   };
@@ -86,11 +66,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateUser = (updates: Partial<User>) => {
     if (!user) return;
     const updated = { ...user, ...updates };
+    localStorage.setItem(USER_DATA_KEY, JSON.stringify(updated));
     setUser(updated);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, isAuthenticated: !!user, login, register, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, loading, isAuthenticated: !!user, login, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );
